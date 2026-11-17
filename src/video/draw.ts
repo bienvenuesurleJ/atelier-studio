@@ -1,6 +1,7 @@
 import { frameSize } from '../domain/video'
 import type { Clip, Film } from './model'
 import { clipsAt } from './model'
+import { defaultBox } from './placement'
 
 export interface FrameAssets {
   images: Map<string, CanvasImageSource>
@@ -21,10 +22,17 @@ export function drawFilm(ctx: CanvasRenderingContext2D, film: Film, time: number
     if (track.kind === 'audio') continue
     if (track.kind === 'image' || track.kind === 'video') paintTrackMedia(ctx, film, track.clips, time, assets)
     for (const clip of clipsAt(track, time)) {
+      if (clip.hidden || clip.x != null) continue
       const local = time - clip.start
       if (track.kind === 'shape') paintShape(ctx, film, clip)
       if (track.kind === 'text') paintText(ctx, film, clip, local)
     }
+  }
+  const placed = film.tracks.flatMap((track) => track.clips.filter((clip) => clip.x != null && !clip.hidden).map((clip) => ({ clip, kind: track.kind })))
+  placed.sort((a, b) => (a.clip.z ?? 0) - (b.clip.z ?? 0))
+  for (const item of placed) {
+    if (time < item.clip.start || time >= item.clip.start + item.clip.duration) continue
+    paintPlaced(ctx, film, item.clip, item.kind, time - item.clip.start, assets)
   }
   for (const cue of film.subtitles ?? []) {
     if (time >= cue.start && time < cue.start + cue.duration) paintSubtitle(ctx, cue.text, cue.style)
@@ -49,6 +57,7 @@ function paintTrackMedia(ctx: CanvasRenderingContext2D, film: Film, clips: Clip[
       paintMedia(ctx, film, previous, time - previous.start, assets, 1)
       ctx.restore()
     }
+    if (clip.hidden || clip.x != null) continue
     const alpha = clip.transition === 'fade' || clip.transition === 'slide' || clip.transition === 'zoom' ? fadeWindow(local, clip.duration) : 1
     ctx.save()
     ctx.globalAlpha = alpha
@@ -136,6 +145,38 @@ function paintText(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local:
   ctx.restore()
 }
 
+function paintPlaced(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, kind: string, local: number, assets: FrameAssets): void {
+  const { width, height } = sizeOf(ctx)
+  const box = defaultBox(clip, kind)
+  ctx.save()
+  ctx.globalAlpha = box.opacity
+  ctx.translate(((box.x + box.w / 2) / 100) * width, ((box.y + box.h / 2) / 100) * height)
+  ctx.rotate((box.rotation * Math.PI) / 180)
+  const boxW = (box.w / 100) * width
+  const boxH = (box.h / 100) * height
+  ctx.translate(-boxW / 2, -boxH / 2)
+  if (kind === 'text') {
+    ctx.fillStyle = film.brand.text
+    ctx.font = `600 ${Math.max(12, boxH * 0.45)}px ${film.brand.font}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    wrap(ctx, clip.text, 0, 0, boxW, Math.max(14, boxH * 0.5))
+  } else if (kind === 'shape') {
+    ctx.fillStyle = clip.color || film.brand.primary
+    if (clip.shape === 'circle') ctx.beginPath(), ctx.arc(boxW / 2, boxH / 2, Math.min(boxW, boxH) / 2, 0, Math.PI * 2), ctx.fill()
+    else ctx.fillRect(0, 0, boxW, boxH)
+  } else {
+    const source = clip.media ? assets.images.get(clip.media) : undefined
+    ctx.beginPath()
+    ctx.rect(0, 0, boxW, boxH)
+    ctx.clip()
+    if (source) coverInBox(ctx, source, boxW, boxH)
+    else ctx.fillRect(0, 0, boxW, boxH)
+  }
+  ctx.restore()
+  void local
+}
+
 function paintSubtitle(ctx: CanvasRenderingContext2D, text: string, style: 'bas' | 'cinema' | 'bandeau'): void {
   const { width, height } = sizeOf(ctx)
   ctx.save()
@@ -151,6 +192,15 @@ function paintSubtitle(ctx: CanvasRenderingContext2D, text: string, style: 'bas'
   ctx.fillStyle = '#fff'
   ctx.fillText(text, width / 2, y, width * 0.8)
   ctx.restore()
+}
+
+function coverInBox(ctx: CanvasRenderingContext2D, image: CanvasImageSource, boxW: number, boxH: number): void {
+  const source = image as HTMLImageElement
+  const sw = source.naturalWidth || (image as HTMLVideoElement).videoWidth || 0
+  const sh = source.naturalHeight || (image as HTMLVideoElement).videoHeight || 0
+  if (!sw || !sh) return
+  const scale = Math.max(boxW / sw, boxH / sh)
+  ctx.drawImage(image, (boxW - sw * scale) / 2, (boxH - sh * scale) / 2, sw * scale, sh * scale)
 }
 
 function cover(ctx: CanvasRenderingContext2D, image: CanvasImageSource, boxW: number, boxH: number): void {

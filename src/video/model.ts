@@ -18,6 +18,15 @@ export interface Clip {
   color: string
   volume: number
   muted: boolean
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+  rotation?: number
+  opacity?: number
+  hidden?: boolean
+  locked?: boolean
+  z?: number
 }
 
 export interface Track {

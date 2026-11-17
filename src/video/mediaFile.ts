@@ -1,4 +1,5 @@
 import type { Clip, Film } from './model'
+import { smartOrigin } from './placement'
 
 export const MEDIA_ACCEPT = 'image/*,video/*,.jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,.m4v'
 
@@ -34,6 +35,7 @@ export function placeMedia(film: Film, selectedId: string | null, dataUrl: strin
     }
   }
   const id = `clip-${Math.random().toString(36).slice(2, 8)}`
+  const origin = smartOrigin(track.clips.length)
   const clip: Clip = {
     id,
     start: Math.max(0, Math.round(at * 10) / 10),
@@ -50,6 +52,10 @@ export function placeMedia(film: Film, selectedId: string | null, dataUrl: strin
     color: '',
     volume: 1,
     muted: true,
+    x: origin.x,
+    y: origin.y,
+    w: 42,
+    h: 28,
   }
   return {
     clipId: id,
