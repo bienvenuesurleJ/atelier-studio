@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { askGemini, readGeminiKey, writeGeminiKey } from './gemini'
 import { understand, type AssistantCommand } from './intents'
+import { imageProblem, readImageFile } from '@/studio/readImage'
+import { LOGO_ACCEPT } from '@/studio/IdentityPanel'
 
 interface Message {
   role: 'user' | 'guide' | 'gemini'
@@ -13,6 +15,8 @@ export function Assistant() {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [key, setKey] = useState(() => readGeminiKey())
+  const [logoPreview, setLogoPreview] = useState('')
+  const [notice, setNotice] = useState('')
   const [messages, setMessages] = useState<Message[]>([{
     role: 'guide',
     text: 'Je réponds sans réseau. Dites « ajoute un hero », « mets un logo », « style nature » ou « exporte ». Une clé Gemini, si vous en collez une, est facultative.',
@@ -37,10 +41,39 @@ export function Assistant() {
     }
   }
 
+  const importBrand = async (file: File, kind: 'logo' | 'favicon' | 'backdrop') => {
+    const problem = imageProblem(file)
+    if (problem) {
+      setNotice(problem)
+      return
+    }
+    try {
+      const dataUrl = await readImageFile(file)
+      if (!location.hash.includes('/projet/')) {
+        setNotice('Ouvrez d’abord un projet. Le fichier est prêt, il s’appliquera à l’ouverture.')
+        window.dispatchEvent(new CustomEvent('atelier-brand', { detail: { kind, dataUrl } }))
+      } else {
+        window.dispatchEvent(new CustomEvent('atelier-brand', { detail: { kind, dataUrl } }))
+        setNotice(kind === 'logo' ? 'Logo ajouté ✅' : kind === 'favicon' ? 'Favicon ajoutée ✅' : 'Fond ajouté ✅')
+      }
+      if (kind === 'logo') setLogoPreview(dataUrl)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Import impossible.')
+    }
+  }
+
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
       {open ? (
-        <section className="flex max-h-[70vh] w-[min(100vw-2rem,22rem)] flex-col overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl">
+        <section
+          className="flex max-h-[70vh] w-[min(100vw-2rem,22rem)] flex-col overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            const file = event.dataTransfer.files?.[0]
+            if (file) void importBrand(file, 'logo')
+          }}
+        >
           <header className="border-b border-line px-3 py-2">
             <p className="font-serif text-xl">Assistant</p>
             <p className="text-xs text-muted">{key ? 'Gemini est branché. Les actions demandent encore votre accord.' : 'Mode intégré, sans IA et sans clé.'}</p>
@@ -58,6 +91,13 @@ export function Assistant() {
               </article>
             ))}
           </div>
+          <div className="grid gap-2 border-t border-line p-3">
+            <BrandButton label="Importer mon logo" kind="logo" onFile={importBrand} />
+            <BrandButton label="Importer le favicon" kind="favicon" onFile={importBrand} />
+            <BrandButton label="Importer le fond" kind="backdrop" onFile={importBrand} />
+            {logoPreview ? <img src={logoPreview} alt="Aperçu du logo" className="h-14 w-14 rounded-md border border-line object-contain" /> : null}
+            {notice ? <p className="text-sm text-brass">{notice}</p> : null}
+          </div>
           <form className="grid gap-2 border-t border-line p-3" onSubmit={(event) => { event.preventDefault(); void send() }}>
             <input className="h-10 rounded-lg border border-line bg-sand px-3 text-sm" value={draft} placeholder="Que voulez-vous faire ?" onChange={(event) => setDraft(event.target.value)} />
             <button type="submit" className="h-10 rounded-lg bg-brass text-sm text-sand">Envoyer</button>
@@ -72,5 +112,23 @@ export function Assistant() {
         {open ? 'Fermer' : 'Assistant'}
       </button>
     </div>
+  )
+}
+
+function BrandButton({ label, kind, onFile }: { label: string; kind: 'logo' | 'favicon' | 'backdrop'; onFile: (file: File, kind: 'logo' | 'favicon' | 'backdrop') => void }) {
+  return (
+    <label className="relative flex h-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-brass text-sm text-sand">
+      {label}
+      <input
+        className="absolute inset-0 cursor-pointer opacity-0"
+        type="file"
+        accept={LOGO_ACCEPT}
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) onFile(file, kind)
+        }}
+      />
+    </label>
   )
 }

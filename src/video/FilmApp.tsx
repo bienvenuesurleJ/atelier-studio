@@ -9,6 +9,8 @@ import { recordFilms } from '@/sync/store'
 import { loadFilms, saveFilms, touchFilm } from '@/video/db'
 import { drawFilm } from '@/video/draw'
 import { deleteClip, filmDuration, moveClip, splitClip, trimClip, type Clip, type Film, type FilmLibrary } from '@/video/model'
+import { bring, defaultBox, nudge } from '@/video/placement'
+import { Stage } from '@/video/Stage'
 import { MEDIA_ACCEPT, mediaKindFromFile, mediaTooLarge, placeMedia, readFileAsDataUrl } from '@/video/mediaFile'
 import { createFilm, FILM_TEMPLATES } from '@/video/templates'
 import { recordCanvas, type AudioCue } from '@/studio/recordVideo'
@@ -158,10 +160,16 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const images = useRef(new Map<string, CanvasImageSource>())
+  const [frameBox, setFrameBox] = useState({ left: 0, top: 0, width: 0, height: 0 })
   const size = frameSize(film.format)
   const duration = filmDuration(film)
   const clip = film.tracks.flatMap((track) => track.clips).find((item) => item.id === selected) ?? null
 
+  const patchClip = (id: string, partial: Partial<Clip>, record = true) => {
+    const next = { ...film, tracks: film.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => item.id === id ? { ...item, ...partial } : item) })) }
+    if (record) commit(next)
+    else onChange(next)
+  }
   const commit = (next: Film) => {
     setPast((stack) => [...stack.slice(-30), film])
     setFuture([])
@@ -235,6 +243,57 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   }, [film, time, size.width, size.height, assetTick])
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const update = () => setFrameBox({ left: canvas.offsetLeft, top: canvas.offsetTop, width: canvas.clientWidth, height: canvas.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [film.format, size.width, size.height])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (target.closest('input, textarea, select')) return
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) {
+          setFuture((future) => {
+            const next = future[0]
+            if (!next) return future
+            setPast((past) => [...past, film])
+            onChange(next)
+            return future.slice(1)
+          })
+        } else {
+          setPast((past) => {
+            const prev = past.at(-1)
+            if (!prev) return past
+            setFuture((future) => [film, ...future])
+            onChange(prev)
+            return past.slice(0, -1)
+          })
+        }
+      }
+      if (!clip || clip.locked) return
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') {
+        event.preventDefault()
+        const copy = { ...clip, id: `clip-${Math.random().toString(36).slice(2, 8)}`, x: (clip.x ?? 10) + 4, y: (clip.y ?? 10) + 4 }
+        onChange({ ...film, tracks: film.tracks.map((track) => track.clips.some((item) => item.id === clip.id) ? { ...track, clips: [...track.clips, copy] } : track) })
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') onChange(deleteClip(film, clip.id))
+      if (event.key.startsWith('Arrow')) {
+        event.preventDefault()
+        const kind = film.tracks.find((track) => track.clips.some((item) => item.id === clip.id))?.kind ?? 'text'
+        onChange({ ...film, tracks: film.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => item.id === clip.id ? { ...item, ...nudge(defaultBox(item, kind), event.key, event.shiftKey) } : item) })) })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  useEffect(() => {
     if (!playing) return
     const started = performance.now() - time * 1000
     let frame = 0
@@ -271,6 +330,7 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
             onDrop={(event) => { event.preventDefault(); setDropOver(false); const file = event.dataTransfer.files?.[0]; if (file) void importFile(file) }}
           >
             <canvas ref={canvasRef} width={size.width} height={size.height} className="absolute inset-4 m-auto h-auto max-h-[calc(100%-2rem)] w-auto max-w-[calc(100%-2rem)] rounded-xl shadow-2xl" />
+            <Stage film={film} time={time} selected={selected} frame={frameBox} onSelect={setSelected} onPatch={patchClip} />
             {dropOver ? <p className="pointer-events-none absolute bottom-3 rounded-full bg-black/70 px-3 py-1 text-xs text-white">Déposez pour importer</p> : null}
           </div>
           <Timeline film={film} time={time} selected={selected} onSelect={setSelected} onTime={setTime} onBegin={() => setPast((stack) => [...stack.slice(-30), film])} onChange={onChange} onImport={() => fileRef.current?.click()} />
@@ -283,7 +343,8 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
               <option value="16:9">16:9</option>
             </Select>
           </label>
-          <p className="mt-3 text-xs text-muted">Glissez une photo ou une vidéo sur l’aperçu. Si un plan image ou vidéo est sélectionné, le fichier le remplace.</p>
+          <Layers film={film} selected={selected} onSelect={setSelected} onChange={onChange} />
+          <p className="mt-3 text-xs text-muted">Glissez un élément sur l’aperçu. Les poignées redimensionnent et tournent. Maj+flèche avance de 5.</p>
           {clip ? <ClipForm film={film} clip={clip} commit={commit} onImport={(file) => void importFile(file)} /> : <p className="mt-3 text-sm text-muted">Sélectionnez un plan, ou importez un média pour en créer un.</p>}
           <MusicForm film={film} commit={commit} />
           <SubtitleForm film={film} commit={commit} />
@@ -308,10 +369,10 @@ function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange, o
       <div className="relative max-h-64 overflow-auto" onPointerDown={(event) => { if (event.target === event.currentTarget) onTime(event.nativeEvent.offsetX / px) }}>
         <div style={{ width: duration * px }} className="relative">
           <div className="absolute bottom-0 top-0 w-px bg-brass" style={{ left: time * px }} />
-          {film.tracks.map((track) => (
-            <div key={track.id} className="relative h-12 border-t border-line">
-              <span className="absolute left-1 top-0 text-[10px] uppercase tracking-wider text-muted">{track.name}</span>
-              {track.clips.map((clip) => (
+          {film.tracks.flatMap((track) => track.clips.map((clip) => ({ clip, name: clip.text || track.name }))).map(({ clip, name }) => (
+            <div key={clip.id} className="relative h-10 border-t border-line">
+              <span className="absolute left-1 top-0 z-10 text-[10px] uppercase tracking-wider text-muted">{name}</span>
+              {[clip].map((clip) => (
                 <button
                   key={clip.id}
                   type="button"
@@ -334,7 +395,7 @@ function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange, o
                   }}
                   onPointerUp={() => { drag.current = null }}
                 >
-                  {clip.text || clip.mediaKind || track.name}
+                  {clip.text || clip.mediaKind || name}
                 </button>
               ))}
             </div>
@@ -342,6 +403,49 @@ function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange, o
         </div>
       </div>
     </div>
+  )
+}
+
+function Layers({ film, selected, onSelect, onChange }: { film: Film; selected: string | null; onSelect: (id: string) => void; onChange: (film: Film) => void }) {
+  const items = film.tracks.flatMap((track) => track.clips.map((clip) => ({ clip, name: clip.text || track.name })))
+  items.sort((a, b) => (b.clip.z ?? 0) - (a.clip.z ?? 0))
+  const order = (where: 'forward' | 'back' | 'front' | 'backmost') => {
+    if (!selected) return
+    const ranks = bring(items.map((item) => item.clip), selected, where)
+    onChange({
+      ...film,
+      tracks: film.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => ({ ...clip, z: ranks.find((rank) => rank.id === clip.id)?.z ?? clip.z })),
+      })),
+    })
+  }
+  return (
+    <div className="grid gap-1">
+      <p className="text-xs uppercase tracking-wider text-muted">Calques</p>
+      {items.length === 0 ? <p className="text-xs text-muted">Aucun élément.</p> : null}
+      {items.map(({ clip, name }) => (
+        <div key={clip.id} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selected === clip.id ? 'border-brass' : 'border-line'}`}>
+          <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => onSelect(clip.id)}>{name}</button>
+          <button type="button" aria-label="Masquer" onClick={() => onChange({ ...film, tracks: film.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => item.id === clip.id ? { ...item, hidden: !item.hidden } : item) })) })}>{clip.hidden ? 'Voir' : 'Cacher'}</button>
+          <button type="button" aria-label="Verrouiller" onClick={() => onChange({ ...film, tracks: film.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => item.id === clip.id ? { ...item, locked: !item.locked } : item) })) })}>{clip.locked ? 'Ouvert' : 'Bloquer'}</button>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" variant="quiet" onClick={() => order('forward')}>Avant</Button>
+        <Button size="sm" variant="quiet" onClick={() => order('back')}>Arrière</Button>
+        <Button size="sm" variant="quiet" onClick={() => order('front')}>Premier plan</Button>
+        <Button size="sm" variant="quiet" onClick={() => order('backmost')}>Dernier plan</Button>
+      </div>
+    </div>
+  )
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className="grid gap-1 text-xs text-muted">{label}
+      <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
   )
 }
 
@@ -367,6 +471,14 @@ function ClipForm({ film, clip, commit, onImport }: { film: Film; clip: Clip; co
       </label>
       {clip.media.startsWith('data:image') ? <img src={clip.media} alt="" className="h-16 w-full rounded-md object-cover" /> : null}
       {clip.media.startsWith('data:video') ? <p className="text-xs text-forest">Vidéo prête dans ce plan.</p> : null}
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField label="X" value={clip.x ?? 0} onChange={(value) => patch({ x: value })} />
+        <NumberField label="Y" value={clip.y ?? 0} onChange={(value) => patch({ y: value })} />
+        <NumberField label="Largeur" value={clip.w ?? 40} onChange={(value) => patch({ w: value })} />
+        <NumberField label="Hauteur" value={clip.h ?? 20} onChange={(value) => patch({ h: value })} />
+        <NumberField label="Rotation" value={clip.rotation ?? 0} onChange={(value) => patch({ rotation: value })} />
+        <NumberField label="Opacité" value={clip.opacity ?? 1} onChange={(value) => patch({ opacity: value })} />
+      </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={clip.muted} onChange={(event) => patch({ muted: event.target.checked })} /> Couper le son du clip</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={clip.kenBurns} onChange={(event) => patch({ kenBurns: event.target.checked })} /> Ken Burns</label>
       <label className="grid gap-1 text-xs text-muted">Transition

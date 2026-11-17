@@ -112,8 +112,21 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
         setInspectorOpen(true)
       }
     }
+    const onBrand = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: string; dataUrl?: string }>).detail
+      if (!detail?.dataUrl) return
+      if (detail.kind === 'logo') commit(touch({ ...project, logo: detail.dataUrl }))
+      if (detail.kind === 'favicon') commit(touch({ ...project, favicon: detail.dataUrl }))
+      if (detail.kind === 'backdrop') commit(touch({ ...project, backdrop: { ...(project.backdrop ?? emptyBackdrop()), src: detail.dataUrl } }))
+      setRightMode('identity')
+      setInspectorOpen(true)
+    }
     window.addEventListener('atelier-assistant', onAssist)
-    return () => window.removeEventListener('atelier-assistant', onAssist)
+    window.addEventListener('atelier-brand', onBrand)
+    return () => {
+      window.removeEventListener('atelier-assistant', onAssist)
+      window.removeEventListener('atelier-brand', onBrand)
+    }
   })
 
   useEffect(() => {
