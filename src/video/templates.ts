@@ -12,6 +12,21 @@ export const FILM_TEMPLATES: { id: string; name: string; detail: string; format:
   { id: 'coach', name: 'Coach / fitness', detail: 'La promesse, la séance, le créneau.', format: '9:16' },
   { id: 'beaute', name: 'Salon de beauté', detail: 'Le geste, le tarif, le rendez-vous.', format: '9:16' },
   { id: 'artisan', name: 'Artisan', detail: 'Le métier, le devis, la zone.', format: '1:1' },
+  { id: 'brunch', name: 'Brunch', detail: 'Le dimanche, la table, l’heure.', format: '9:16' },
+  { id: 'soldes', name: 'Derniers jours', detail: 'Une date, une remise, une adresse.', format: '1:1' },
+  { id: 'fleuriste', name: 'Fleuriste', detail: 'Le bouquet, la saison, le retrait.', format: '9:16' },
+  { id: 'boulangerie', name: 'Boulangerie', detail: 'Le fournil, l’heure, le pain.', format: '9:16' },
+  { id: 'hotel', name: 'Hôtel', detail: 'La chambre, le petit-déjeuner, la nuit.', format: '16:9' },
+  { id: 'yoga', name: 'Cours de yoga', detail: 'Le cours, le niveau, l’essai.', format: '9:16' },
+  { id: 'garage', name: 'Garage', detail: 'Le contrôle, le devis, l’atelier.', format: '16:9' },
+  { id: 'vin', name: 'Cave', detail: 'La cuvée, la visite, la bouteille.', format: '1:1' },
+  { id: 'photo', name: 'Séance photo', detail: 'Le lieu, la durée, le tarif.', format: '16:9' },
+  { id: 'traiteur', name: 'Traiteur', detail: 'Le plateau, le délai, le devis.', format: '1:1' },
+  { id: 'librairie', name: 'Librairie', detail: 'La sélection, la rencontre, l’heure.', format: '9:16' },
+  { id: 'osteo', name: 'Cabinet', detail: 'Le motif, la séance, le créneau.', format: '9:16' },
+  { id: 'velo', name: 'Atelier vélo', detail: 'La révision, le forfait, le retrait.', format: '1:1' },
+  { id: 'mariage', name: 'Mariage', detail: 'La date, le lieu, la formule.', format: '16:9' },
+  { id: 'epicerie', name: 'Épicerie', detail: 'Le rayon, la consigne, l’horaire.', format: '9:16' },
 ]
 
 const blank = (): FilmBrand => ({
@@ -41,6 +56,9 @@ export function createFilm(templateId: string, format?: VideoFormat): Film {
     musicVolume: 0.32,
     musicFade: 0.7,
     musicMuted: false,
+    subtitles: [
+      { id: 'sub-1', start: 0.4, duration: 2.2, text: template.name, style: 'bas' },
+    ],
     createdAt: now,
     updatedAt: now,
   }
@@ -100,6 +118,24 @@ function clip(input: ClipInput): Clip {
     volume: 1,
     muted: false,
   }
+}
+
+const extraLines: Record<string, [string, string, string, string]> = {
+  brunch: ['Brunch du dimanche', 'De 11 h à 14 h', 'La table du fond', '11 h'],
+  soldes: ['Derniers jours', '−30 % jusqu’à samedi', 'En boutique seulement', '−30 %'],
+  fleuriste: ['Bouquet de saison', 'Retrait au marché', 'Commande la veille', 'Saison'],
+  boulangerie: ['Sortie du four', 'Le pain à 7 h 30', 'Fermé le lundi', '7 h 30'],
+  hotel: ['Chambre sur cour', 'Petit-déjeuner inclus', 'Deux nuits minimum', 'Nuit'],
+  yoga: ['Cours du soir', 'Tous niveaux', 'Premier cours offert', '19 h'],
+  garage: ['Contrôle avant l’été', 'Devis avant les pièces', 'Véhicule de courtoisie', 'Devis'],
+  vin: ['Cuvée du domaine', 'Visite le samedi', 'Bouteille à emporter', 'Cave'],
+  photo: ['Séance d’une heure', '20 photos livrées', 'Extérieur ou studio', '1 h'],
+  traiteur: ['Plateau du dimanche', 'Commande 48 h avant', 'Livraison en ville', '48 h'],
+  librairie: ['Table des nouveautés', 'Rencontre jeudi 18 h', 'Commande sous 48 h', 'Jeudi'],
+  osteo: ['Première séance', '45 minutes', 'Sans ordonnance', '45 min'],
+  velo: ['Révision de printemps', 'Prêt en 48 h', 'Forfait freins 35 €', '48 h'],
+  mariage: ['Le jour J', 'Reportage 8 heures', 'Album sous six semaines', '8 h'],
+  epicerie: ['Rayon vrac', 'Consigne reprise', 'Ouvert jusqu’à 19 h 30', 'Vrac'],
 }
 
 function scriptFor(id: string, brand: FilmBrand): { images: ClipInput[]; shapes: ClipInput[]; texts: ClipInput[] } {
@@ -189,6 +225,18 @@ function scriptFor(id: string, brand: FilmBrand): { images: ClipInput[]; shapes:
         { start: 0.2, duration: 2.4, text: brand.name, subtext: 'Coupe et couleur', textAnim: 'rise' },
         { start: 2.6, duration: 2.8, text: 'Couleur dès 74 €', subtext: 'Uniquement sur rendez-vous', textAnim: 'fade' },
         { start: 5.4, duration: 2.6, text: 'Écrire pour un créneau', subtext: brand.city, textAnim: 'type' },
+      ],
+    }
+  }
+  const extra = extraLines[id]
+  if (extra) {
+    return {
+      images: [{ start: 0, duration: 8, kenBurns: true, transition: 'fade' }],
+      shapes: [bar(0, 8), badge(2, 3, extra[3] || 'Nouveau')],
+      texts: [
+        { start: 0.2, duration: 2.4, text: extra[0], subtext: brand.name, textAnim: 'pop' },
+        { start: 2.6, duration: 2.6, text: extra[1], subtext: brand.city, textAnim: 'glisse' },
+        { start: 5.2, duration: 2.6, text: extra[2], subtext: 'Exemple à personnaliser', textAnim: 'fade' },
       ],
     }
   }
