@@ -4,9 +4,12 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
 import { ArrowLeft, Copy, Eye, EyeOff, Monitor, Redo2, Smartphone, Tablet, Trash2, Undo2 } from 'lucide-react'
-import { BLOCKS, getBlockDefinition } from '@/domain/blocks'
+import { getBlockDefinition } from '@/domain/blocks'
+import { emptyBackdrop } from '@/domain/backdrop'
 import { PALETTES, STYLES } from '@/domain/styles'
 import { applyCommittedBoxes } from '@/domain/freeform'
+import { IdentityPanel, SectionBackdrop } from '@/studio/IdentityPanel'
+import { VariantGallery } from '@/studio/VariantGallery'
 import { FreePanel } from '@/studio/FreePanel'
 import { MotionPanel } from '@/studio/MotionPanel'
 import {
@@ -26,7 +29,7 @@ import {
   updateBlock,
 } from '@/domain/projectOps'
 import { FONT_PAIRS } from '@/domain/styles'
-import type { Block, ElementStyle, Project, Viewport } from '@/domain/types'
+import type { Block, ElementStyle, Project, SiteBackdrop, Viewport } from '@/domain/types'
 import { exportIssues, previewDocument } from '@/export/generateSite'
 import { zipProject } from '@/export/zip'
 import { CONNECTORS, connectorStatusLabel } from '@/domain/connectors'
@@ -47,6 +50,10 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   const [viewport, setViewport] = useState<Viewport>('desktop')
   const [tab, setTab] = useState<'add' | 'layers' | 'pages' | 'media'>('layers')
   const [preview, setPreview] = useState(false)
+  const [inspectorWidth, setInspectorWidth] = useState(360)
+  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [rightMode, setRightMode] = useState<'block' | 'identity'>('block')
+  const scrollRequest = useRef('')
   const [issuesOpen, setIssuesOpen] = useState(false)
   const past = useRef<Project[]>([])
   const future = useRef<Project[]>([])
@@ -135,7 +142,8 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   useEffect(() => {
     const win = frame.current?.contentWindow
     if (!win) return
-    win.postMessage({ type: 'atelier-highlight', id: selectedId, element: elementKey ? `${selectedId}:${elementKey}` : '' }, '*')
+    const scroll = scrollRequest.current !== '' && scrollRequest.current === selectedId
+    win.postMessage({ type: 'atelier-highlight', id: selectedId, element: elementKey ? `${selectedId}:${elementKey}` : '', scroll }, '*')
     win.postMessage({ type: 'atelier-reselect', ids: nodeIds }, '*')
   }, [selectedId, elementKey, html, nodeIds])
 
@@ -153,8 +161,8 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   const errors = issues.filter((issue) => issue.level === 'error')
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2">
         <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft size={16} /> Projets</Button>
         <input
           className="min-w-40 flex-1 bg-transparent font-serif text-xl outline-none"
@@ -174,9 +182,12 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
         {onVideo ? <Button variant="quiet" size="sm" onClick={onVideo}>Vidéo</Button> : null}
         <Button size="sm" onClick={() => setIssuesOpen(true)}>Exporter</Button>
       </header>
-      <div className={cn('grid min-h-0 flex-1', preview ? 'grid-cols-1' : 'lg:grid-cols-[280px_minmax(0,1fr)_320px]')}>
+      <div
+        className="grid min-h-0 min-w-0 flex-1 overflow-hidden"
+        style={{ gridTemplateColumns: preview ? 'minmax(0,1fr)' : inspectorOpen ? `248px minmax(0,1fr) ${inspectorWidth}px` : '248px minmax(0,1fr) 44px' }}
+      >
         {!preview ? (
-          <aside className="hidden min-h-0 flex-col border-r border-line lg:flex">
+          <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-line">
             <div className="flex border-b border-line text-xs">
               {(['add', 'layers', 'pages', 'media'] as const).map((id) => (
                 <button key={id} type="button" className={cn('flex-1 py-2', tab === id && 'text-brass')} onClick={() => setTab(id)}>
@@ -184,26 +195,23 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
                 </button>
               ))}
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-3">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
               {tab === 'add' && page ? (
-                <div className="grid gap-2">
-                  {BLOCKS.map((definition) => (
-                    <button
-                      key={definition.type}
-                      type="button"
-                      className="rounded-lg border border-line px-2 py-2 text-left hover:border-brass"
-                      onClick={() => {
-                        const next = addBlock(project, page.id, definition.type)
-                        const added = next.pages.find((item) => item.id === page.id)?.blocks.at(-2)
-                        commit(next)
-                        if (added) setSelectedId(added.id)
-                      }}
-                    >
-                      <span className="block text-sm">{definition.name}</span>
-                      <span className="block text-xs text-muted">{definition.category} · {definition.variants.length} variantes</span>
-                    </button>
-                  ))}
-                </div>
+                <VariantGallery
+                  project={project}
+                  onAdd={(type, variant) => {
+                    const before = new Set(page.blocks.map((item) => item.id))
+                    const next = addBlock(project, page.id, type, variant)
+                    const added = next.pages.find((item) => item.id === page.id)?.blocks.find((item) => !before.has(item.id))
+                    commit(next)
+                    if (!added) return
+                    scrollRequest.current = added.id
+                    setSelectedId(added.id)
+                    setElementKey('')
+                    setRightMode('block')
+                    setInspectorOpen(true)
+                  }}
+                />
               ) : null}
               {tab === 'layers' && page ? (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -214,7 +222,7 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
                           key={item.id}
                           block={item}
                           active={item.id === selectedId}
-                          onSelect={() => { setSelectedId(item.id); setElementKey('') }}
+                          onSelect={() => { setSelectedId(item.id); setElementKey(''); setRightMode('block'); setInspectorOpen(true) }}
                           onHide={() => commit(updateBlock(project, page.id, item.id, (current) => ({ ...current, visible: !current.visible })))}
                           onDuplicate={() => commit(duplicateBlock(project, page.id, item.id))}
                           onDelete={() => commit(removeBlock(project, page.id, item.id))}
@@ -231,21 +239,53 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
             </div>
           </aside>
         ) : null}
-        <div className="min-h-0 overflow-auto bg-[#090807] p-4">
-          <div className="mx-auto overflow-hidden rounded-xl border border-line bg-white shadow-2xl" style={{ width: `min(100%, ${width}px)` }}>
-            <iframe
-              ref={frame}
-              title="Aperçu du site"
-              className="h-[calc(100vh-8rem)] w-full bg-white"
-              srcDoc={html}
-              onLoad={() => frame.current?.contentWindow?.postMessage({ type: 'atelier-highlight', id: selectedId, element: elementKey ? `${selectedId}:${elementKey}` : '' }, '*')}
-            />
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#090807]">
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            <div className="mx-auto h-full overflow-hidden rounded-xl border border-line bg-white shadow-2xl" style={{ width: `min(100%, ${width}px)` }}>
+              <iframe
+                ref={frame}
+                title="Aperçu du site"
+                className="h-full min-h-[420px] w-full bg-white"
+                srcDoc={html}
+                onLoad={() => {
+                  const scroll = scrollRequest.current !== '' && scrollRequest.current === selectedId
+                  scrollRequest.current = ''
+                  frame.current?.contentWindow?.postMessage({ type: 'atelier-highlight', id: selectedId, element: elementKey ? `${selectedId}:${elementKey}` : '', scroll }, '*')
+                }}
+              />
+            </div>
           </div>
-          <p className="mx-auto mt-2 max-w-xl text-center text-xs text-muted">Cliquez un texte pour le sélectionner. Double-cliquez pour l’écrire. Le rendu est celui de l’export.</p>
+          <p className="shrink-0 px-4 pb-2 text-center text-xs text-muted">Cliquez un texte pour le sélectionner. Double-cliquez pour l’écrire. Le rendu est celui de l’export.</p>
         </div>
         {!preview ? (
-          <aside className="hidden min-h-0 overflow-auto border-l border-line p-3 lg:block">
-            {page && block ? (
+          <aside className="relative flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-line">
+            {inspectorOpen ? (
+              <div
+                className="absolute bottom-0 left-0 top-0 z-10 w-1.5 cursor-col-resize"
+                onPointerDown={(event) => {
+                  const startX = event.clientX
+                  const startW = inspectorWidth
+                  const move = (next: PointerEvent) => setInspectorWidth(Math.min(520, Math.max(280, startW + startX - next.clientX)))
+                  const up = () => {
+                    window.removeEventListener('pointermove', move)
+                    window.removeEventListener('pointerup', up)
+                  }
+                  window.addEventListener('pointermove', move)
+                  window.addEventListener('pointerup', up)
+                }}
+              />
+            ) : null}
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-2 py-1">
+              {inspectorOpen ? <span className="text-xs text-muted">Réglages</span> : null}
+              <button type="button" className="text-xs text-brass" onClick={() => setInspectorOpen((value) => !value)}>{inspectorOpen ? 'Replier' : 'Ouvrir'}</button>
+            </div>
+            {inspectorOpen ? (
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
+            <div className="mb-3 flex gap-2 text-xs">
+              <button type="button" className={rightMode === 'block' ? 'text-brass' : 'text-muted'} onClick={() => setRightMode('block')}>Section</button>
+              <button type="button" className={rightMode === 'identity' ? 'text-brass' : 'text-muted'} onClick={() => setRightMode('identity')}>Identité</button>
+            </div>
+            {rightMode === 'identity' ? <IdentityPanel project={project} onChange={(next) => commit(touch(next))} /> : page && block ? (
               <Inspector
                 project={project}
                 pageId={page.id}
@@ -259,8 +299,13 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
                 onReplay={(id) => frame.current?.contentWindow?.postMessage({ type: 'atelier-replay', id }, '*')}
               />
             ) : (
-              <p className="text-sm text-muted">Sélectionnez une section dans l’aperçu ou dans les calques.</p>
+              <div className="grid gap-3">
+                <p className="text-sm text-muted">Sélectionnez une section dans l’aperçu ou dans les calques. Le logo, le favicon et le fond du site sont dans Identité.</p>
+                <IdentityPanel project={project} onChange={(next) => commit(touch(next))} />
+              </div>
             )}
+            </div>
+            ) : null}
           </aside>
         ) : null}
       </div>
@@ -495,6 +540,10 @@ function Inspector({
         </Select>
       </label>
       <Toggle checked={block.visible} onCheckedChange={(visible) => commit(updateBlock(project, pageId, block.id, (current) => ({ ...current, visible })))} label="Section visible" />
+      <SectionBackdrop
+        backdrop={block.backdrop}
+        onChange={(backdrop: SiteBackdrop) => commit(updateBlock(project, pageId, block.id, (current) => ({ ...current, backdrop: backdrop.src ? backdrop : emptyBackdrop() })))}
+      />
       <label className="grid gap-1 text-xs text-muted">
         Animation
         <Select value={block.reveal} onChange={(event) => commit(updateBlock(project, pageId, block.id, (current) => ({ ...current, reveal: event.target.value as Block['reveal'] })))}>
