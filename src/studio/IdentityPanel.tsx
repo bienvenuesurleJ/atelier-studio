@@ -12,7 +12,7 @@ export function IdentityPanel({ project, onChange }: { project: Project; onChang
   return (
     <div className="grid gap-3">
       <p className="text-xs uppercase tracking-[0.14em] text-brass">Identité</p>
-      <FileField label="Logo" accept="image/*" hint="Affiché dans l’en-tête et le pied de page." value={project.logo} onFile={async (file) => onChange({ ...project, logo: await fileToDataUrl(file) })} onClear={() => onChange({ ...project, logo: '' })} />
+      <FileField label="Logo" accept={LOGO_ACCEPT} hint="PNG, JPG, SVG ou WebP. Il apparaît tout de suite dans l’en-tête et le pied de page. Les HEIC iPhone doivent d’abord être enregistrés en JPEG." value={project.logo} onFile={async (file) => onChange({ ...project, logo: await fileToDataUrl(file) })} onClear={() => onChange({ ...project, logo: '' })} />
       <label className="grid gap-1 text-xs text-muted">Taille du logo ({project.logoSize || 42} px)
         <input type="range" min={24} max={120} value={project.logoSize || 42} onChange={(event) => onChange({ ...project, logoSize: Number(event.target.value) })} />
       </label>
@@ -46,18 +46,28 @@ function BackdropFields({ title, backdrop, onChange }: { title: string; backdrop
   )
 }
 
-function FileField({ label, accept, hint, value, onFile, onClear }: { label: string; accept: string; hint?: string; value: string; onFile: (file: File) => Promise<void>; onClear: () => void }) {
+export const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg,.heic,.heif'
+
+export function FileField({ label, accept, hint, value, onFile, onClear }: { label: string; accept: string; hint?: string; value: string; onFile: (file: File) => Promise<void>; onClear: () => void }) {
   return (
     <div className="grid gap-1 text-xs text-muted">
-      <span>{label}</span>
+      <span className="text-sm text-ink">{label}</span>
       {hint ? <span>{hint}</span> : null}
-      <input type="file" accept={accept} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onFile(file); event.target.value = '' }} />
+      <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-lg bg-brass px-3 text-sm font-medium text-sand">
+        Choisir un fichier
+        <input className="sr-only" type="file" accept={accept} onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (!file) return
+          void onFile(file).catch((error) => toast.error(error instanceof Error ? error.message : 'Import impossible.'))
+        }} />
+      </label>
       {value ? (
         <span className="flex items-center gap-2">
-          <img src={value} alt="" className="h-10 w-10 rounded-md object-contain" />
+          <img src={value} alt="" className="h-12 w-12 rounded-md border border-line bg-paper object-contain" />
           <button type="button" className="text-danger" onClick={onClear}>Retirer</button>
         </span>
-      ) : <span>Aucun fichier.</span>}
+      ) : <span>Aucun fichier pour l’instant.</span>}
     </div>
   )
 }

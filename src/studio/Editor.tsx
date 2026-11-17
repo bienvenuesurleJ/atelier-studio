@@ -30,7 +30,9 @@ import {
   updateBlock,
 } from '@/domain/projectOps'
 import { FONT_PAIRS } from '@/domain/styles'
-import type { Block, ElementStyle, Project, SiteBackdrop, Viewport } from '@/domain/types'
+import type { Block, ElementStyle, Project, SiteBackdrop, StyleId, Viewport } from '@/domain/types'
+import { emptyProduct } from '@/domain/shop'
+import type { AssistantCommand } from '@/assistant/intents'
 import { exportIssues, previewDocument } from '@/export/generateSite'
 import { zipProject } from '@/export/zip'
 import { CONNECTORS, connectorStatusLabel } from '@/domain/connectors'
@@ -39,6 +41,8 @@ import { Input, Select, Textarea } from '@/components/ui/field'
 import { Toggle } from '@/components/ui/switch'
 import { Modal } from '@/components/ui/dialog'
 import { fileToDataUrl } from '@/studio/images'
+import { LOGO_ACCEPT } from '@/studio/IdentityPanel'
+import { ThemeSwitch } from '@/studio/ThemeSwitch'
 import { ImageFrameButton } from '@/studio/ImageFrameDialog'
 import { fontFormat, safeFamily } from '@/domain/fonts'
 import { cn } from '@/lib/utils'
@@ -59,6 +63,7 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   const past = useRef<Project[]>([])
   const future = useRef<Project[]>([])
   const frame = useRef<HTMLIFrameElement>(null)
+  const logoInput = useRef<HTMLInputElement>(null)
   const page = project.pages.find((item) => item.id === pageId) ?? project.pages[0]
   const block = page?.blocks.find((item) => item.id === selectedId)
   const html = useMemo(() => (page ? previewDocument(project, page.slug) : ''), [project, page])
@@ -84,6 +89,34 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   }
 
   useEffect(() => {
+    const onAssist = (event: Event) => {
+      const command = (event as CustomEvent<AssistantCommand>).detail
+      if (!command) return
+      if (command.type === 'focus-logo') {
+        setRightMode('identity')
+        setInspectorOpen(true)
+        logoInput.current?.click()
+      }
+      if (command.type === 'export') setIssuesOpen(true)
+      if (command.type === 'set-style') commit(setStyle(project, command.styleId as StyleId))
+      if (command.type === 'add-product') commit(touch({ ...project, products: [emptyProduct({ price: 12, stock: 5 }), ...(project.products ?? [])], shop: 'mini' }))
+      if (command.type === 'add-block' && page) {
+        const before = new Set(page.blocks.map((item) => item.id))
+        const next = addBlock(project, page.id, command.blockType as Block['type'])
+        const added = next.pages.find((item) => item.id === page.id)?.blocks.find((item) => !before.has(item.id))
+        commit(next)
+        if (!added) return
+        scrollRequest.current = added.id
+        setSelectedId(added.id)
+        setRightMode('block')
+        setInspectorOpen(true)
+      }
+    }
+    window.addEventListener('atelier-assistant', onAssist)
+    return () => window.removeEventListener('atelier-assistant', onAssist)
+  })
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
@@ -101,6 +134,7 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
       const data = event.data as { type?: string; id?: string; element?: string; slug?: string; value?: string; ids?: string[]; blockId?: string; boxes?: { id: string; x: number; y: number; w: number; h: number; r: number; z: number }[] }
+      if (data?.type === 'atelier-logo') logoInput.current?.click()
       if (data?.type === 'atelier-select' && data.id) {
         setSelectedId(data.id)
         setElementKey(data.element?.split(':')[1] ?? '')
@@ -179,6 +213,25 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
           <Device icon={<Tablet size={15} />} label="Tablette" active={viewport === 'tablet'} onClick={() => setViewport('tablet')} />
           <Device icon={<Smartphone size={15} />} label="Mobile" active={viewport === 'mobile'} onClick={() => setViewport('mobile')} />
         </div>
+        <ThemeSwitch />
+        <Button size="sm" onClick={() => { setRightMode('identity'); setInspectorOpen(true); logoInput.current?.click() }}>Logo</Button>
+        <input
+          ref={logoInput}
+          className="sr-only"
+          type="file"
+          accept={LOGO_ACCEPT}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (!file) return
+            void fileToDataUrl(file)
+              .then((logo) => {
+                commit(touch({ ...project, logo }))
+                toast.success('Logo visible dans l’aperçu')
+              })
+              .catch((error) => toast.error(error instanceof Error ? error.message : 'Le logo n’a pas pu être lu.'))
+          }}
+        />
         <Button variant="quiet" size="sm" onClick={() => setPreview((value) => !value)}>{preview ? 'Éditer' : 'Aperçu'}</Button>
         {onVideo ? <Button variant="quiet" size="sm" onClick={onVideo}>Vidéo</Button> : null}
         <Button size="sm" onClick={() => setIssuesOpen(true)}>Exporter</Button>

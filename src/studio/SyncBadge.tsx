@@ -30,7 +30,7 @@ export function SyncBadge() {
     <button
       type="button"
       onClick={() => { window.location.hash = '/admin' }}
-      className="fixed bottom-3 right-3 z-30 inline-flex items-center gap-2 rounded-full border border-line bg-paper/95 px-3 py-1.5 text-xs text-ink shadow-lg backdrop-blur"
+      className="fixed bottom-3 left-3 z-30 inline-flex items-center gap-2 rounded-full border border-line bg-paper/95 px-3 py-1.5 text-xs text-ink shadow-lg backdrop-blur"
     >
       <span className={`h-2 w-2 rounded-full ${tone[status.phase]} ${status.phase === 'syncing' ? 'animate-pulse' : ''}`} />
       {label[status.phase]}

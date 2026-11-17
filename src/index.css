@@ -3,17 +3,36 @@
 @theme {
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Instrument Serif", Georgia, serif;
-  --color-ink: #f4efe7;
-  --color-muted: #b3a79a;
-  --color-paper: #171512;
-  --color-paper-2: #211e1a;
-  --color-sand: #0e0d0b;
-  --color-line: #3a342c;
-  --color-brass: #d7b07a;
-  --color-brass-2: #f0d7ae;
-  --color-forest: #8fbfa8;
-  --color-moss: #2f6d52;
-  --color-danger: #e07a72;
+  --color-ink: #ebe6dc;
+  --color-muted: #b7b0a4;
+  --color-paper: #2c2925;
+  --color-paper-2: #35312c;
+  --color-sand: #23201c;
+  --color-line: #4a443c;
+  --color-brass: #d4c4ae;
+  --color-brass-2: #e4d7c6;
+  --color-forest: #9cbaa8;
+  --color-moss: #3f5348;
+  --color-danger: #c9847c;
+}
+
+html[data-theme='light'] {
+  --color-ink: #2a2622;
+  --color-muted: #5c564e;
+  --color-paper: #f7f4ef;
+  --color-paper-2: #efeae3;
+  --color-sand: #f3efe8;
+  --color-line: #d9d1c6;
+  --color-brass: #3f5348;
+  --color-brass-2: #314238;
+  --color-forest: #2f6a4f;
+  --color-moss: #d7e6dc;
+  --color-danger: #8d3d36;
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 html,
