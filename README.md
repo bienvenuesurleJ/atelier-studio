@@ -19,7 +19,7 @@ npm run build
 ## Utiliser le studio
 
 1. Créez un projet. Le modèle (restaurant, salon, artisan, landing, boutique, application…) n’est qu’un point de départ.
-2. Dans l’éditeur, cliquez un titre, un bouton ou une image. Double-cliquez un texte pour l’écrire. Le panneau de droite change la variante, les couleurs, la taille, l’alignement, et distingue ordinateur, tablette et mobile.
+2. Dans l’éditeur, cliquez un titre, un bouton ou une image. Double-cliquez un texte pour l’écrire. Le panneau de droite, toujours visible, change la variante, les couleurs, la taille et l’alignement. L’onglet Ajouter montre une vignette de chaque variante avant de l’insérer. Identité importe le logo, le favicon et le fond du site.
 3. Passez une section en canevas libre pour poser des textes, images, boutons, formes, conteneurs et grilles. Glissez-les, redimensionnez-les, tournez-les. Maj+clic ou le rectangle de sélection en prend plusieurs ; alignez-les ou groupez-les. Les positions tablette et mobile sont indépendantes. Le ZIP reprend exactement ces positions.
 4. Réordonnez les sections en les glissant dans Calques. Ajoutez-en depuis la bibliothèque (plus de vingt-cinq types, chacun avec plusieurs variantes).
 5. Le panneau Animation choisit le déclencheur (chargement, apparition, survol, clic, défilement), l’effet (fondu, glissement, zoom, flou, rotation, 3D, lettres, mots, masque, décalage, parallaxe, bandeau, dégradé) et les réglages, y compris un ressort. Rejouer montre le mouvement. On peut le couper sur mobile. Les visiteurs qui ont demandé moins d’animation voient l’état final.
