@@ -39,6 +39,10 @@ select {
   color: inherit;
 }
 
+input[type='file'] {
+  max-width: 100%;
+}
+
 ::selection {
   background: #5c4630;
 }

@@ -332,6 +332,7 @@ export function buildScript(): string {
       if (!event.data || event.data.type !== 'atelier-highlight') return;
       document.querySelectorAll('[data-bid]').forEach((node) => {
         node.toggleAttribute('data-selected', node.getAttribute('data-bid') === event.data.id);
+        if (event.data.scroll && node.getAttribute('data-bid') === event.data.id) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
       document.querySelectorAll('[data-el]').forEach((node) => {
         node.toggleAttribute('data-selected-el', node.getAttribute('data-el') === event.data.element);

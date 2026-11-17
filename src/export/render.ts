@@ -4,6 +4,7 @@ import { embedUrl, mapQuery, safeHref, safeImg, type LinkMode } from '../domain/
 import type { Block, DayHours, FreeNode, ListItem, Page, Project } from '../domain/types'
 import { esc, lines, paragraphs, safeJson } from './html'
 import { animDataAttrs } from './animAttrs'
+import { backdropVars } from '../domain/backdrop'
 
 export interface ArticlePage {
   slug: string
@@ -91,7 +92,12 @@ function renderBlock(block: Block, project: Project, options: PageOptions, artic
   const animated = Boolean(block.motionSpec && block.motionSpec.effect !== 'none')
   const selected = options.preview && options.selectedId === block.id ? ' data-selected="true"' : ''
   const min = freeMin(block)
-  return `<section id="${esc(block.id)}" class="block block-${esc(block.type)}${!animated && reveal !== 'none' ? ' reveal' : ''}" data-bid="${esc(block.id)}" data-block="${esc(block.type)}" data-variant="${esc(block.variant)}" data-reveal="${esc(reveal)}" data-align="${esc(block.layout.align)}" data-pad="${esc(block.layout.pad)}" data-bg="${esc(block.layout.bg)}" data-width="${esc(block.layout.width)}" data-layout="${esc(block.layoutMode ?? 'flow')}" data-hide-flow="${block.hideFlow ? '1' : '0'}" style="--free-min:${min}px"${selected}${animDataAttrs(block.motionSpec)}>${flow}${free}</section>`
+  const photo = backdropVars(block.backdrop, 'section')
+  return `<section id="${esc(block.id)}" class="block block-${esc(block.type)}${!animated && reveal !== 'none' ? ' reveal' : ''}${photo ? ' has-photo' : ''}" data-bid="${esc(block.id)}" data-block="${esc(block.type)}" data-variant="${esc(block.variant)}" data-reveal="${esc(reveal)}" data-align="${esc(block.layout.align)}" data-pad="${esc(block.layout.pad)}" data-bg="${esc(block.layout.bg)}" data-width="${esc(block.layout.width)}" data-layout="${esc(block.layoutMode ?? 'flow')}" data-hide-flow="${block.hideFlow ? '1' : '0'}" style="--free-min:${min}px;${photo}"${selected}${animDataAttrs(block.motionSpec)}>${flow}${free}</section>`
+}
+
+export function renderStandaloneBlock(project: Project, block: Block): string {
+  return renderBlock(block, project, { linkMode: 'preview', preview: false }, [])
 }
 
 function renderBody(block: Block, project: Project, options: PageOptions, articles: ArticlePage[]): string {
@@ -216,6 +222,7 @@ function hero(block: Block, project: Project, options: PageOptions): string {
   const copy = `<div class="hero-copy"><p class="kicker"${elAttr(block, 'kicker')}${edit(options, 'kicker')}>${esc(field(block, 'kicker'))}</p><h1 class="${typing.trim()}" data-text="${esc(title)}"${elAttr(block, 'title')}${edit(options, 'title')}>${esc(title)}</h1><p${elAttr(block, 'subtitle')}${edit(options, 'subtitle')}>${esc(field(block, 'subtitle'))}</p><div class="hero-actions">${button(field(block, 'primaryLabel'), field(block, 'primaryHref'), 'btn', options, `${block.id}:primary`)}${button(field(block, 'secondaryLabel'), field(block, 'secondaryHref'), 'btn btn-ghost', options, `${block.id}:secondary`)}</div></div>`
   const picture = `<div class="hero-media ${project.motion.parallax ? 'parallax' : ''}">${media(field(block, 'image'), field(block, 'imageAlt'), project.business.name, `${block.id}:image`, block.imageFrames?.image ? `${block.id}:image` : '')}</div>`
   if (block.variant === 'center') return `<div class="wrap">${copy}${picture}</div>`
+  if (block.variant === 'stack') return `<div class="wrap">${picture}${copy}</div>`
   if (block.variant === 'overlay') return `${picture}${copy}`
   return `<div class="wrap hero-grid">${copy}${picture}</div>`
 }
@@ -235,7 +242,7 @@ function features(block: Block): string {
         : `<article class="card"><h3>${esc(entry.fields.title)}</h3><p class="muted">${esc(entry.fields.text)}</p></article>`,
     )
     .join('')
-  const gridClass = block.variant === 'list' ? 'feature-list' : 'grid-3'
+  const gridClass = block.variant === 'list' ? 'feature-list' : block.variant === 'duo' ? 'grid-2-eq' : 'grid-3'
   return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'intro')}<div class="${gridClass}">${cards}</div></div>`
 }
 
@@ -246,7 +253,8 @@ function services(block: Block): string {
       return `<article class="card">${image}<h3>${esc(entry.fields.title)}</h3><p class="muted">${esc(entry.fields.text)}</p>${entry.fields.price ? `<p><strong>${esc(entry.fields.price)}</strong></p>` : ''}</article>`
     })
     .join('')
-  return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'intro')}<div class="${block.variant === 'rows' ? 'feature-list' : 'grid-3'}">${cards}</div></div>`
+  const serviceClass = block.variant === 'rows' ? 'feature-list' : block.variant === 'duo' ? 'grid-2-eq' : 'grid-3'
+  return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'intro')}<div class="${serviceClass}">${cards}</div></div>`
 }
 
 function pricing(block: Block, options: PageOptions): string {
@@ -258,7 +266,8 @@ function pricing(block: Block, options: PageOptions): string {
       return `<article class="price-card" data-highlight="${entry.fields.highlight === 'true' ? 'true' : 'false'}"><h3>${esc(entry.fields.name)}</h3><p class="price-value">${esc(entry.fields.price)} <span>${esc(entry.fields.period)}</span></p><p>${esc(entry.fields.description)}</p><ul>${points}</ul>${button(entry.fields.cta || 'Choisir', entry.fields.href || 'contact', 'btn', options)}</article>`
     })
     .join('')
-  return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'intro')}<div class="${block.variant === 'stacked' ? 'feature-list' : 'grid-3'}">${cards}</div></div>`
+  const priceClass = block.variant === 'stacked' ? 'feature-list' : block.variant === 'compare' ? 'price-row' : 'grid-3'
+  return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'intro')}<div class="${priceClass}">${cards}</div></div>`
 }
 
 function menu(block: Block, project: Project): string {
@@ -293,7 +302,8 @@ function testimonials(block: Block): string {
         : `<blockquote class="card"><p>${esc(entry.fields.quote)}</p><footer><strong>${esc(entry.fields.author)}</strong><br><span class="muted">${esc(entry.fields.role)}</span></footer></blockquote>`,
     )
     .join('')
-  return `<div class="wrap">${sectionHead(block, 'kicker', 'title')}<p class="muted">Textes d’exemple à remplacer par de vrais avis, avec l’accord des personnes. Ce ne sont pas des témoignages réels.</p><div class="${block.variant === 'featured' ? 'feature-list' : 'grid-3'}">${quotes}</div></div>`
+  const quoteClass = block.variant === 'featured' ? 'feature-list' : block.variant === 'rangee' ? 'quote-row' : 'grid-3'
+  return `<div class="wrap">${sectionHead(block, 'kicker', 'title')}<p class="muted">Textes d’exemple à remplacer par de vrais avis, avec l’accord des personnes. Ce ne sont pas des témoignages réels.</p><div class="${quoteClass}">${quotes}</div></div>`
 }
 
 function team(block: Block): string {
@@ -363,6 +373,7 @@ function contact(block: Block, project: Project): string {
   const info = addressBlock(project)
   const form = formMarkup(project, 'contact', field(block, 'submit') || 'Envoyer', [])
   if (block.variant === 'simple') return `<div class="wrap">${sectionHead(block, 'kicker', 'title', 'text')}${form}</div>`
+  if (block.variant === 'bande') return `<div class="wrap contact-band">${sectionHead(block, 'kicker', 'title', 'text')}<div class="panel" style="padding:1.2rem">${form}</div></div>`
   return `<div class="wrap grid-2"><div>${sectionHead(block, 'kicker', 'title', 'text')}${info}</div><div class="panel" style="padding:1.2rem">${form}</div></div>`
 }
 
@@ -517,6 +528,12 @@ function steps(block: Block): string {
   return `<div class="wrap">${sectionHead(block, 'kicker', 'title')}<ol class="steps">${items}</ol></div>`
 }
 
+function footerBrand(project: Project): string {
+  const logo = safeImg(project.logo)
+  const mark = logo ? `<img class="footer-logo" src="${esc(logo)}" alt="">` : ''
+  return `<div class="footer-brand">${mark}<strong>${esc(project.business.name)}</strong></div>`
+}
+
 function footer(block: Block, project: Project, options: PageOptions): string {
   const social = [
     project.business.instagram ? `<a href="${esc(safeHref(project.business.instagram, options.linkMode))}">Instagram</a>` : '',
@@ -533,9 +550,9 @@ function footer(block: Block, project: Project, options: PageOptions): string {
     return `<div class="wrap"><p>${esc(field(block, 'note'))}</p></div>`
   }
   if (block.variant === 'center') {
-    return `<div class="wrap center-footer"><strong>${esc(project.business.name)}</strong><p>${esc(field(block, 'blurb'))}</p><div class="footer-links">${nav}</div><p class="muted">${esc(field(block, 'note'))}</p></div>`
+    return `<div class="wrap center-footer">${footerBrand(project)}<p>${esc(field(block, 'blurb'))}</p><div class="footer-links">${nav}</div><p class="muted">${esc(field(block, 'note'))}</p></div>`
   }
-  return `<div class="wrap footer-grid"><div><strong>${esc(project.business.name)}</strong><p>${esc(field(block, 'blurb'))}</p><p class="muted">${esc(field(block, 'note'))}</p></div><div class="footer-links">${nav}</div><div class="footer-links">${social}<p class="muted">${esc([project.business.address, project.business.postalCode, project.business.city].filter(Boolean).join(' '))}</p></div></div>`
+  return `<div class="wrap footer-grid"><div>${footerBrand(project)}<p>${esc(field(block, 'blurb'))}</p><p class="muted">${esc(field(block, 'note'))}</p></div><div class="footer-links">${nav}</div><div class="footer-links">${social}<p class="muted">${esc([project.business.address, project.business.postalCode, project.business.city].filter(Boolean).join(' '))}</p></div></div>`
 }
 
 function addressBlock(project: Project): string {
@@ -647,6 +664,9 @@ function documentShell(
       ? `<a class="header-phone" href="tel:${esc(business.phone.replace(/\s/g, ''))}">${esc(business.phone)}</a>`
       : ''
   const logo = safeImg(project.logo)
+  const favicon = safeImg(project.favicon)
+  const logoSize = Math.min(160, Math.max(24, Number(project.logoSize) || 42))
+  const siteBackdrop = backdropVars(project.backdrop, 'site')
   const brand = `<a class="brand" href="${esc(safeHref('index', input.options.linkMode))}">${logo ? `<img class="brand-logo" data-logo="1" src="${esc(logo)}" alt="">` : ''}<span>${esc(business.name)}</span></a>`
   const showNav = project.pages.filter((page) => page.showInNav).length > 1
   const json = safeJson(schemaData(project, canonical, logo && !logo.startsWith('data:') ? logo : undefined))
@@ -674,6 +694,7 @@ ${canonical ? `<meta property="og:url" content="${esc(canonical)}">` : ''}
 ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">` : ''}
 <meta name="twitter:card" content="${ogImage ? 'summary_large_image' : 'summary'}">
 ${manifest}
+${favicon ? `<link rel="icon" href="${esc(favicon)}">` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="${esc(`https://fonts.googleapis.com/css2?${project.tokens.googleQuery}&display=swap`)}" rel="stylesheet">
@@ -681,7 +702,7 @@ ${css}
 <script type="application/ld+json">${json}</script>
 <script>document.documentElement.classList.add('js')</script>
 </head>
-<body data-style="${esc(project.styleId)}" data-spacing="${esc(project.tokens.spacing)}" data-preview="${input.options.preview ? 'on' : 'off'}" data-pwa="${project.pwa ? 'on' : 'off'}" data-gradient="${motion.gradient ? 'on' : 'off'}" data-transition="${motion.pageTransition ? 'on' : 'off'}" data-parallax="${motion.parallax ? 'on' : 'off'}" data-typing="${motion.typing ? 'on' : 'off'}" data-counters="${motion.counters ? 'on' : 'off'}" data-progress="${motion.scrollProgress ? 'on' : 'off'}" data-hover="${esc(motion.hover)}" data-micro="${motion.buttonMicro ? 'on' : 'off'}" data-order="${esc(project.ordering.mode)}" data-shop="${esc(project.shop)}" data-tax="${esc(String(project.taxRate || 0))}" data-shipping="${esc(String(project.shippingFlat || 0))}" data-whatsapp="${esc(project.business.whatsapp || project.business.phone)}" data-email="${esc(project.business.email)}" data-header="${esc(project.chrome.headerVariant)}">
+<body class="${siteBackdrop ? 'has-backdrop' : ''}" style="--logo-size:${logoSize}px;${siteBackdrop}" data-style="${esc(project.styleId)}" data-spacing="${esc(project.tokens.spacing)}" data-preview="${input.options.preview ? 'on' : 'off'}" data-pwa="${project.pwa ? 'on' : 'off'}" data-gradient="${motion.gradient ? 'on' : 'off'}" data-transition="${motion.pageTransition ? 'on' : 'off'}" data-parallax="${motion.parallax ? 'on' : 'off'}" data-typing="${motion.typing ? 'on' : 'off'}" data-counters="${motion.counters ? 'on' : 'off'}" data-progress="${motion.scrollProgress ? 'on' : 'off'}" data-hover="${esc(motion.hover)}" data-micro="${motion.buttonMicro ? 'on' : 'off'}" data-order="${esc(project.ordering.mode)}" data-shop="${esc(project.shop)}" data-tax="${esc(String(project.taxRate || 0))}" data-shipping="${esc(String(project.shippingFlat || 0))}" data-whatsapp="${esc(project.business.whatsapp || project.business.phone)}" data-email="${esc(project.business.email)}" data-header="${esc(project.chrome.headerVariant)}">
 <a class="skip" href="#contenu">Aller au contenu</a>
 ${motion.scrollProgress ? '<div class="scroll-progress" aria-hidden="true"></div>' : ''}
 ${project.chrome.announcement ? `<div class="announce">${esc(project.chrome.announcement)}</div>` : ''}
