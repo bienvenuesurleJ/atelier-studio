@@ -19,7 +19,8 @@ export function safeHref(raw: string, mode: LinkMode): string {
 export function safeImg(src: string): string {
   const value = src.trim()
   if (!value) return ''
-  if (/^data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value)) return value
+  if (/^data:image\/[a-z0-9.+-]+(?:;charset=[^;,]+)?;base64,[a-z0-9+/=\s]+$/i.test(value)) return value.replace(/\s/g, '')
+  if (/^data:image\/svg\+xml[;,]/i.test(value)) return value
   if (/^assets\/[a-zA-Z0-9._-]+$/.test(value)) return value
   try {
     const url = new URL(value)

@@ -292,6 +292,12 @@ export function buildScript(): string {
   }
 
   document.addEventListener('click', (event) => {
+    const logo = event.target.closest('[data-logo]');
+    if (preview && logo) {
+      event.preventDefault();
+      window.parent.postMessage({ type: 'atelier-logo' }, '*');
+      return;
+    }
     const link = event.target.closest('a');
     if (link) {
       const href = link.getAttribute('href') || '';

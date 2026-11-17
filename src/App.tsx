@@ -17,6 +17,8 @@ import { Business } from '@/studio/Business'
 import { SettingsScreen } from '@/studio/Settings'
 import { AdminScreen } from '@/studio/Admin'
 import { SyncBadge } from '@/studio/SyncBadge'
+import { Assistant } from '@/assistant/Assistant'
+import { ThemeSwitch } from '@/studio/ThemeSwitch'
 import { cn } from '@/lib/utils'
 
 export default function App() {
@@ -60,6 +62,16 @@ export default function App() {
   }, [state])
 
   useEffect(() => {
+    const onAssist = (event: Event) => {
+      const command = (event as CustomEvent<{ type?: string }>).detail
+      if (command?.type === 'open-video') go({ name: 'films' })
+      if (command?.type === 'open-admin') go({ name: 'admin' })
+    }
+    window.addEventListener('atelier-assistant', onAssist)
+    return () => window.removeEventListener('atelier-assistant', onAssist)
+  }, [])
+
+  useEffect(() => {
     const onHash = () => setRoute(parseHash(window.location.hash))
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -80,6 +92,7 @@ export default function App() {
     <div className="flex h-full min-h-0 flex-col">
       {saveError ? <p className="bg-danger/20 px-4 py-2 text-sm text-danger">{saveError}</p> : null}
       <SyncBadge />
+      <Assistant />
       {route.name !== 'films' && !inEditor ? (
         <header className="flex items-center justify-between gap-4 border-b border-line px-4 py-3 md:px-6">
           <button type="button" className="text-left" onClick={() => go({ name: 'dashboard' })}>
@@ -87,6 +100,7 @@ export default function App() {
             <span className="ml-2 text-xs uppercase tracking-[0.18em] text-brass">Local</span>
           </button>
           <button type="button" className="rounded-full border border-line px-3 py-1 text-sm text-brass" onClick={() => go({ name: 'films' })}>Studio Vidéo</button>
+          <ThemeSwitch />
           <nav className="flex flex-wrap gap-1">
             <Nav icon={<LayoutDashboard size={16} />} active={route.name === 'dashboard'} onClick={() => go({ name: 'dashboard' })}>
               Tableau
