@@ -54,7 +54,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Hero',
     description: 'Ouverture de page : titre, promesse, boutons, image.',
     category: 'Ouverture',
-    variants: [v('split', 'Côte à côte'), v('center', 'Centré'), v('overlay', 'Image plein écran')],
+    variants: [v('split', 'Côte à côte'), v('center', 'Centré'), v('overlay', 'Image plein écran'), v('stack', 'Image puis texte')],
     fields: [
       text('kicker', 'Surtitre'),
       text('title', 'Titre'),
@@ -89,7 +89,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Atouts',
     description: 'Trois ou quatre raisons de choisir la maison.',
     category: 'Preuve',
-    variants: [v('grid', 'Grille'), v('list', 'Liste')],
+    variants: [v('grid', 'Grille'), v('list', 'Liste'), v('duo', 'Deux colonnes')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre'), area('intro', 'Introduction')],
     lists: [{ key: 'items', label: 'Atouts', itemLabel: 'Atout', fields: [text('title', 'Titre'), area('text', 'Texte')] }],
     create: (ctx) => {
@@ -105,7 +105,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Prestations',
     description: 'Cartes de services avec prix.',
     category: 'Offre',
-    variants: [v('cards', 'Cartes'), v('rows', 'Lignes')],
+    variants: [v('cards', 'Cartes'), v('rows', 'Lignes'), v('duo', 'Deux colonnes')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre'), area('intro', 'Introduction')],
     lists: [{
       key: 'items',
@@ -126,7 +126,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Tarifs',
     description: 'Formules comparées.',
     category: 'Offre',
-    variants: [v('cards', 'Cartes'), v('stacked', 'Empilé')],
+    variants: [v('cards', 'Cartes'), v('stacked', 'Empilé'), v('compare', 'Comparatif')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre'), area('intro', 'Introduction')],
     lists: [{
       key: 'plans',
@@ -193,7 +193,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Avis',
     description: 'Témoignages saisis par vous, pas récupérés automatiquement.',
     category: 'Preuve',
-    variants: [v('cards', 'Cartes'), v('featured', 'Grande citation')],
+    variants: [v('cards', 'Cartes'), v('featured', 'Grande citation'), v('rangee', 'Rangée')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre')],
     lists: [{
       key: 'items',
@@ -229,7 +229,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Galerie',
     description: 'Photos du lieu. Sans image, un cadre coloré tient la place.',
     category: 'Contenu',
-    variants: [v('grid', 'Grille'), v('mosaic', 'Mosaïque')],
+    variants: [v('grid', 'Grille'), v('mosaic', 'Mosaïque'), v('bande', 'Bandeau')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre')],
     lists: [{
       key: 'shots',
@@ -315,7 +315,7 @@ export const BLOCKS: BlockDefinition[] = [
     name: 'Contact',
     description: 'Coordonnées et formulaire. L’envoi dépend du mode choisi dans Connexions.',
     category: 'Contact',
-    variants: [v('split', 'Texte et formulaire'), v('simple', 'Formulaire seul')],
+    variants: [v('split', 'Texte et formulaire'), v('simple', 'Formulaire seul'), v('bande', 'Bandeau')],
     fields: [text('kicker', 'Surtitre'), text('title', 'Titre'), area('text', 'Texte'), text('submit', 'Bouton')],
     lists: [],
     create: () => data({

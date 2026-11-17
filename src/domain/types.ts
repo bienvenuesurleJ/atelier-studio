@@ -353,6 +353,14 @@ export interface BlockData {
   lists: Record<string, ListItem[]>
 }
 
+export interface SiteBackdrop {
+  src: string
+  position: string
+  overlay: string
+  opacity: number
+  parallax: boolean
+}
+
 export interface BlockLayout {
   align: 'inherit' | 'start' | 'center' | 'end'
   pad: 'inherit' | 'sm' | 'md' | 'lg'
@@ -376,6 +384,7 @@ export interface Block {
   motionSpec: AnimSpec | null
   motions: Record<string, AnimSpec>
   imageFrames: Record<string, ImageAdjust>
+  backdrop?: SiteBackdrop
 }
 
 export interface Page {
@@ -408,6 +417,9 @@ export interface Project {
   pwaName: string
   pwaShortName: string
   logo: string
+  logoSize: number
+  favicon: string
+  backdrop: SiteBackdrop
   clientName: string
   status: ProjectStatus
   shop: ShopMode
