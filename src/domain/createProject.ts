@@ -114,6 +114,7 @@ export function createProject(input: CreateProjectInput): Project {
     library: [],
     fonts: [],
     videos: [],
+    products: [],
     pages,
     createdAt: now,
     updatedAt: now,
