@@ -11,7 +11,8 @@ import { drawFilm } from '@/video/draw'
 import { deleteClip, filmDuration, moveClip, splitClip, trimClip, type Clip, type Film, type FilmLibrary } from '@/video/model'
 import { MEDIA_ACCEPT, mediaKindFromFile, mediaTooLarge, placeMedia, readFileAsDataUrl } from '@/video/mediaFile'
 import { createFilm, FILM_TEMPLATES } from '@/video/templates'
-import { recordCanvas } from '@/studio/recordVideo'
+import { recordCanvas, type AudioCue } from '@/studio/recordVideo'
+import { exportH264 } from '@/studio/exportMp4'
 import { Button } from '@/components/ui/button'
 import { Input, Select, Textarea } from '@/components/ui/field'
 
@@ -189,7 +190,7 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   }
 
   useEffect(() => {
-    const urls = film.tracks.flatMap((track) => track.clips.map((item) => item.media).filter(Boolean))
+    const urls = [...film.tracks.flatMap((track) => track.clips.map((item) => item.media).filter(Boolean)), film.brand.logo].filter((url): url is string => Boolean(url))
     let pending = false
     for (const url of urls) {
       if (images.current.has(url)) continue
@@ -285,6 +286,7 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
           <p className="mt-3 text-xs text-muted">Glissez une photo ou une vidéo sur l’aperçu. Si un plan image ou vidéo est sélectionné, le fichier le remplace.</p>
           {clip ? <ClipForm film={film} clip={clip} commit={commit} onImport={(file) => void importFile(file)} /> : <p className="mt-3 text-sm text-muted">Sélectionnez un plan, ou importez un média pour en créer un.</p>}
           <MusicForm film={film} commit={commit} />
+          <SubtitleForm film={film} commit={commit} />
         </aside>
       </div>
     </div>
@@ -381,6 +383,8 @@ function ClipForm({ film, clip, commit, onImport }: { film: Film; clip: Clip; co
           <option value="rise">Montée</option>
           <option value="fade">Fondu</option>
           <option value="type">Frappe</option>
+          <option value="pop">Apparition</option>
+          <option value="glisse">Glissé</option>
           <option value="none">Fixe</option>
         </Select>
       </label>
@@ -416,6 +420,17 @@ function MusicForm({ film, commit }: { film: Film; commit: (film: Film) => void 
   )
 }
 
+function cuesOf(film: Film): AudioCue[] {
+  return film.tracks.flatMap((track) => track.clips.filter((clip) => clip.media && (clip.mediaKind === 'video' || clip.media.startsWith('data:audio'))).map((clip) => ({
+    media: clip.media,
+    start: clip.start,
+    duration: clip.duration,
+    trimIn: clip.trimIn,
+    volume: clip.volume,
+    muted: clip.muted,
+  })))
+}
+
 async function exportFilm(canvas: HTMLCanvasElement | null, film: Film, setExporting: (value: boolean) => void, setProgress: (value: number) => void) {
   if (!canvas) return
   setExporting(true)
@@ -428,31 +443,71 @@ async function exportFilm(canvas: HTMLCanvasElement | null, film: Film, setExpor
         images.set(clip.media, await loadSource(clip.media, clip.mediaKind === 'video'))
       }
     }
-    const result = await recordCanvas({
+    if (film.brand.logo && !images.has(film.brand.logo)) images.set(film.brand.logo, await loadSource(film.brand.logo, false))
+    const draw = (time: number) => {
+      const ctx = canvas.getContext('2d')
+      if (ctx) drawFilm(ctx, film, time, { images })
+    }
+    const shared = {
       canvas,
       duration: filmDuration(film),
-      draw: (time) => {
-        const ctx = canvas.getContext('2d')
-        if (ctx) drawFilm(ctx, film, time, { images })
-      },
+      draw,
       musicId: film.musicMuted ? 'none' : film.musicId,
       musicDataUrl: film.musicMuted ? '' : film.musicDataUrl,
       volume: film.musicVolume,
       fade: film.musicFade,
+      cues: cuesOf(film),
       onProgress: setProgress,
-    })
+    }
+    const h264 = await exportH264(shared)
+    if (h264) {
+      downloadBlob(h264, `${film.name}.mp4`)
+      toast.success('MP4 H.264 téléchargé')
+      return
+    }
+    const result = await recordCanvas(shared)
     const url = URL.createObjectURL(result.blob)
     const link = document.createElement('a')
     link.href = url
     link.download = `${film.name}.${result.extension}`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success(result.extension === 'mp4' ? 'MP4 téléchargé' : 'WebM téléchargé')
+    toast.success(result.extension === 'mp4' ? 'MP4 téléchargé' : 'Ce navigateur n’encode pas le H.264. Fichier WebM téléchargé.')
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Export impossible')
   } finally {
     setExporting(false)
   }
+}
+
+function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function SubtitleForm({ film, commit }: { film: Film; commit: (film: Film) => void }) {
+  const cues = film.subtitles ?? []
+  return (
+    <div className="mt-4 grid gap-2 border-t border-line pt-3">
+      <p className="text-xs text-brass">Sous-titres</p>
+      {cues.length === 0 ? <p className="text-xs text-muted">Aucun sous-titre. Ajoutez une ligne, elle apparaît sur l’image.</p> : null}
+      {cues.map((cue) => (
+        <label key={cue.id} className="grid gap-1 text-xs text-muted">
+          <Input value={cue.text} onChange={(event) => commit({ ...film, subtitles: cues.map((item) => item.id === cue.id ? { ...item, text: event.target.value } : item) })} />
+          <select className="h-8 rounded-lg border border-line bg-sand px-2" value={cue.style} onChange={(event) => commit({ ...film, subtitles: cues.map((item) => item.id === cue.id ? { ...item, style: event.target.value as 'bas' | 'cinema' | 'bandeau' } : item) })}>
+            <option value="bas">Bas</option>
+            <option value="cinema">Cinéma</option>
+            <option value="bandeau">Bandeau</option>
+          </select>
+        </label>
+      ))}
+      <Button size="sm" variant="quiet" onClick={() => commit({ ...film, subtitles: [...cues, { id: `sub-${Math.random().toString(36).slice(2, 6)}`, start: 0.4, duration: 2.4, text: 'Sous-titre', style: 'bas' }] })}>Ajouter un sous-titre</Button>
+    </div>
+  )
 }
 
 function loadSource(src: string, video: boolean): Promise<CanvasImageSource> {

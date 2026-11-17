@@ -35,6 +35,15 @@ export interface FilmBrand {
   bg: string
   text: string
   font: string
+  logo?: string
+}
+
+export interface SubtitleCue {
+  id: string
+  start: number
+  duration: number
+  text: string
+  style: 'bas' | 'cinema' | 'bandeau'
 }
 
 export interface Film {
@@ -49,6 +58,7 @@ export interface Film {
   musicVolume: number
   musicFade: number
   musicMuted: boolean
+  subtitles?: SubtitleCue[]
   createdAt: string
   updatedAt: string
 }

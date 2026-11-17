@@ -6,24 +6,58 @@ export interface FrameAssets {
   images: Map<string, CanvasImageSource>
 }
 
+export function fadeWindow(local: number, duration: number, blend = 0.45): number {
+  if (blend <= 0) return 1
+  const enter = Math.min(1, Math.max(0, local) / blend)
+  const leave = Math.min(1, Math.max(0, duration - local) / blend)
+  return Math.max(0, Math.min(1, enter, leave))
+}
+
 export function drawFilm(ctx: CanvasRenderingContext2D, film: Film, time: number, assets: FrameAssets): void {
   const { width, height } = sizeOf(ctx)
   ctx.fillStyle = film.brand.bg
   ctx.fillRect(0, 0, width, height)
   for (const track of film.tracks) {
     if (track.kind === 'audio') continue
+    if (track.kind === 'image' || track.kind === 'video') paintTrackMedia(ctx, film, track.clips, time, assets)
     for (const clip of clipsAt(track, time)) {
       const local = time - clip.start
-      if (track.kind === 'image' || track.kind === 'video') paintMedia(ctx, film, clip, local, assets)
       if (track.kind === 'shape') paintShape(ctx, film, clip)
       if (track.kind === 'text') paintText(ctx, film, clip, local)
     }
+  }
+  for (const cue of film.subtitles ?? []) {
+    if (time >= cue.start && time < cue.start + cue.duration) paintSubtitle(ctx, cue.text, cue.style)
+  }
+  const logo = film.brand.logo ? assets.images.get(film.brand.logo) : undefined
+  if (logo) {
+    const side = Math.min(width, height) * 0.12
+    ctx.drawImage(logo, width * 0.06, height * 0.06, side, side)
   }
   ctx.fillStyle = film.brand.primary
   ctx.fillRect(0, 0, width, Math.max(6, height * 0.008))
 }
 
-function paintMedia(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local: number, assets: FrameAssets): void {
+function paintTrackMedia(ctx: CanvasRenderingContext2D, film: Film, clips: Clip[], time: number, assets: FrameAssets): void {
+  const active = clipsAt({ id: '', kind: 'image', name: '', clips }, time)
+  for (const clip of active) {
+    const local = time - clip.start
+    const previous = [...clips].reverse().find((item) => item.start + item.duration <= clip.start + 0.08 && item.start + item.duration > clip.start - 0.5)
+    if (previous && local < 0.45) {
+      ctx.save()
+      ctx.globalAlpha = 1 - local / 0.45
+      paintMedia(ctx, film, previous, time - previous.start, assets, 1)
+      ctx.restore()
+    }
+    const alpha = clip.transition === 'fade' || clip.transition === 'slide' || clip.transition === 'zoom' ? fadeWindow(local, clip.duration) : 1
+    ctx.save()
+    ctx.globalAlpha = alpha
+    paintMedia(ctx, film, clip, local, assets, alpha)
+    ctx.restore()
+  }
+}
+
+function paintMedia(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local: number, assets: FrameAssets, _alpha = 1): void {
   const { width, height } = sizeOf(ctx)
   const source = clip.media ? assets.images.get(clip.media) : undefined
   const progress = clip.duration > 0 ? local / clip.duration : 0
@@ -82,8 +116,14 @@ function paintText(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local:
   const { width, height } = sizeOf(ctx)
   const appear = clip.textAnim === 'none' ? 1 : Math.min(1, local / 0.5)
   ctx.save()
-  ctx.globalAlpha = clip.textAnim === 'fade' || clip.textAnim === 'rise' ? appear : 1
-  ctx.translate(0, clip.textAnim === 'rise' ? (1 - appear) * 18 : 0)
+  ctx.globalAlpha = clip.textAnim === 'fade' || clip.textAnim === 'rise' || clip.textAnim === 'pop' || clip.textAnim === 'glisse' ? appear : 1
+  ctx.translate(clip.textAnim === 'glisse' ? (1 - appear) * -48 : 0, clip.textAnim === 'rise' ? (1 - appear) * 18 : 0)
+  if (clip.textAnim === 'pop') {
+    const scale = 0.82 + 0.18 * appear
+    ctx.translate(width * 0.4, height * 0.68)
+    ctx.scale(scale, scale)
+    ctx.translate(-width * 0.4, -height * 0.68)
+  }
   ctx.fillStyle = film.brand.text
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
@@ -93,6 +133,23 @@ function paintText(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local:
   ctx.globalAlpha *= 0.85
   ctx.font = `${Math.round(height * 0.028)}px ${film.brand.font}`
   wrap(ctx, clip.subtext, width * 0.08, height * 0.76, width * 0.84, Math.round(height * 0.036))
+  ctx.restore()
+}
+
+function paintSubtitle(ctx: CanvasRenderingContext2D, text: string, style: 'bas' | 'cinema' | 'bandeau'): void {
+  const { width, height } = sizeOf(ctx)
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const size = Math.round(height * (style === 'cinema' ? 0.04 : 0.032))
+  ctx.font = `${style === 'bandeau' ? 700 : 600} ${size}px sans-serif`
+  const y = style === 'bandeau' ? height * 0.12 : height * 0.88
+  const pad = 16
+  const measured = Math.min(width * 0.86, ctx.measureText(text).width + pad * 2)
+  ctx.fillStyle = style === 'cinema' ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.72)'
+  ctx.fillRect((width - measured) / 2, y - size, measured, size * 2)
+  ctx.fillStyle = '#fff'
+  ctx.fillText(text, width / 2, y, width * 0.8)
   ctx.restore()
 }
 

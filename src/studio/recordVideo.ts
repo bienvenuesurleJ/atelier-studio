@@ -6,6 +6,15 @@ export interface RecordingResult {
   extension: 'mp4' | 'webm'
 }
 
+export interface AudioCue {
+  media: string
+  start: number
+  duration: number
+  trimIn: number
+  volume: number
+  muted: boolean
+}
+
 export async function recordCanvas(options: {
   canvas: HTMLCanvasElement
   duration: number
@@ -14,6 +23,7 @@ export async function recordCanvas(options: {
   musicDataUrl: string
   volume: number
   fade: number
+  cues?: AudioCue[]
   onProgress?: (ratio: number) => void
 }): Promise<RecordingResult> {
   const { canvas, duration, draw } = options
@@ -23,6 +33,7 @@ export async function recordCanvas(options: {
   const gain = audioContext.createGain()
   gain.connect(destination)
   await attachMusic(audioContext, gain, options.musicId, options.musicDataUrl, duration, options.volume, options.fade)
+  await attachCues(audioContext, destination, options.cues ?? [], audioContext.currentTime)
   destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track))
   const mime = pickMime()
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 })
@@ -93,4 +104,23 @@ async function attachMusic(
   source.connect(fadeNode)
   fadeNode.connect(gain)
   source.start()
+}
+
+export async function attachCues(context: BaseAudioContext, destination: AudioNode, cues: AudioCue[], when = 0): Promise<void> {
+  for (const cue of cues) {
+    if (cue.muted || !cue.media || cue.duration <= 0) continue
+    try {
+      const response = await fetch(cue.media)
+      const decoded = await context.decodeAudioData(await response.arrayBuffer())
+      const source = context.createBufferSource()
+      source.buffer = decoded
+      const gain = context.createGain()
+      gain.gain.value = Math.max(0, cue.volume)
+      source.connect(gain)
+      gain.connect(destination)
+      source.start(when + cue.start, Math.max(0, cue.trimIn), cue.duration)
+    } catch {
+      /* piste sans son décodable */
+    }
+  }
 }
