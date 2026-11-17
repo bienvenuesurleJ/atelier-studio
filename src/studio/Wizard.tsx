@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createProject } from '@/domain/createProject'
+import { SITE_PRESETS, createFromPreset } from '@/domain/presets'
 import { STYLES } from '@/domain/styles'
 import type { BusinessType, Project, ProjectKind, StyleId } from '@/domain/types'
 import { BUSINESS_LABELS, KIND_LABELS } from '@/studio/labels'
@@ -41,6 +42,17 @@ export function Wizard({ onCreate, onCancel }: { onCreate: (project: Project) =>
         <h1 className="font-serif text-4xl">Le modèle ne fige rien</h1>
         <p className="max-w-2xl text-sm text-muted">Vous choisirez ensuite chaque texte, chaque couleur, chaque section. Les phrases d’exemple sont à remplacer, y compris les avis.</p>
       </div>
+      <fieldset>
+        <legend className="mb-2 text-sm text-muted">{SITE_PRESETS.length} modèles prêts</legend>
+        <div className="grid max-h-64 gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+          {SITE_PRESETS.map((preset) => (
+            <button key={preset.id} type="button" className={card(false)} onClick={() => onCreate(createFromPreset(preset.id))}>
+              <span className="block font-medium">{preset.name}</span>
+              <span className="mt-1 block text-xs text-muted">{preset.detail}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <fieldset>
         <legend className="mb-2 text-sm text-muted">Type de projet</legend>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,5 +1,8 @@
+import { toast } from 'sonner'
 import type { Project, SiteBackdrop } from '@/domain/types'
+import { applyBrandToFilm } from '@/domain/brand'
 import { emptyBackdrop } from '@/domain/backdrop'
+import { loadFilms, saveFilms } from '@/video/db'
 import { fileToDataUrl } from '@/studio/images'
 import { Input } from '@/components/ui/field'
 
@@ -15,6 +18,7 @@ export function IdentityPanel({ project, onChange }: { project: Project; onChang
       </label>
       <FileField label="Favicon" accept="image/png,image/svg+xml,image/x-icon,image/webp,.ico,.png,.svg" hint="Icône de l’onglet, dans l’aperçu et dans le ZIP." value={project.favicon} onFile={async (file) => onChange({ ...project, favicon: await fileToDataUrl(file) })} onClear={() => onChange({ ...project, favicon: '' })} />
       <BackdropFields title="Fond du site" backdrop={backdrop} onChange={setBackdrop} />
+      <button type="button" className="text-left text-sm text-brass" onClick={() => void applyFilms(project)}>Appliquer ce kit aux films</button>
     </div>
   )
 }
@@ -56,6 +60,12 @@ function FileField({ label, accept, hint, value, onFile, onClear }: { label: str
       ) : <span>Aucun fichier.</span>}
     </div>
   )
+}
+
+async function applyFilms(project: Project) {
+  const library = await loadFilms()
+  await saveFilms({ ...library, films: library.films.map((film) => applyBrandToFilm(film, project)) })
+  toast.success(library.films.length ? 'Couleurs, police et logo appliqués aux films' : 'Aucun film à mettre à jour pour l’instant')
 }
 
 function toColor(value: string): string {
