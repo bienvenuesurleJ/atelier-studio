@@ -98,8 +98,9 @@ function paintText(ctx: CanvasRenderingContext2D, film: Film, clip: Clip, local:
 
 function cover(ctx: CanvasRenderingContext2D, image: CanvasImageSource, boxW: number, boxH: number): void {
   const source = image as HTMLImageElement
-  const sw = source.naturalWidth || (image as HTMLVideoElement).videoWidth || boxW
-  const sh = source.naturalHeight || (image as HTMLVideoElement).videoHeight || boxH
+  const sw = source.naturalWidth || (image as HTMLVideoElement).videoWidth || 0
+  const sh = source.naturalHeight || (image as HTMLVideoElement).videoHeight || 0
+  if (!sw || !sh) return
   const scale = Math.max(boxW / sw, boxH / sh)
   ctx.drawImage(image, (-sw * scale) / 2, (-sh * scale) / 2, sw * scale, sh * scale)
 }

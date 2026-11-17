@@ -9,6 +9,7 @@ import { recordFilms } from '@/sync/store'
 import { loadFilms, saveFilms, touchFilm } from '@/video/db'
 import { drawFilm } from '@/video/draw'
 import { deleteClip, filmDuration, moveClip, splitClip, trimClip, type Clip, type Film, type FilmLibrary } from '@/video/model'
+import { MEDIA_ACCEPT, mediaKindFromFile, mediaTooLarge, placeMedia, readFileAsDataUrl } from '@/video/mediaFile'
 import { createFilm, FILM_TEMPLATES } from '@/video/templates'
 import { recordCanvas } from '@/studio/recordVideo'
 import { Button } from '@/components/ui/button'
@@ -150,7 +151,11 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   const [future, setFuture] = useState<Film[]>([])
   const [exporting, setExporting] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [mediaError, setMediaError] = useState('')
+  const [dropOver, setDropOver] = useState(false)
+  const [assetTick, setAssetTick] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const images = useRef(new Map<string, CanvasImageSource>())
   const size = frameSize(film.format)
   const duration = filmDuration(film)
@@ -162,30 +167,71 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
     onChange(next)
   }
 
+  const importFile = async (file: File) => {
+    const kind = mediaKindFromFile(file)
+    if (!kind) {
+      setMediaError('Ce fichier n’est pas une photo ni une vidéo. Utilisez JPG, PNG, WebP, MP4, WebM ou MOV.')
+      return
+    }
+    if (mediaTooLarge(file.size)) {
+      setMediaError('Fichier trop lourd : 40 Mo maximum.')
+      return
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      const placed = placeMedia(film, selected, dataUrl, kind, time)
+      setMediaError('')
+      setSelected(placed.clipId)
+      commit(placed.film)
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : 'Import impossible.')
+    }
+  }
+
   useEffect(() => {
     const urls = film.tracks.flatMap((track) => track.clips.map((item) => item.media).filter(Boolean))
+    let pending = false
     for (const url of urls) {
       if (images.current.has(url)) continue
-      if (url.startsWith('data:video') || url.startsWith('blob:')) {
+      pending = true
+      const videoLike = url.startsWith('data:video') || url.startsWith('blob:')
+      if (videoLike) {
         const video = document.createElement('video')
-        video.src = url
         video.muted = true
         video.playsInline = true
+        video.preload = 'auto'
+        video.src = url
+        video.onloadeddata = () => setAssetTick((value) => value + 1)
+        video.onerror = () => setMediaError('Cette vidéo n’est pas lisible ici. Préférez un MP4 ou un WebM.')
         images.current.set(url, video)
       } else {
         const image = new Image()
+        image.onload = () => setAssetTick((value) => value + 1)
+        image.onerror = () => setMediaError('Cette image n’a pas pu s’afficher.')
         image.src = url
         images.current.set(url, image)
       }
     }
+    if (!pending) setAssetTick((value) => value + 1)
   }, [film])
 
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!ctx) return
+    for (const track of film.tracks) {
+      for (const item of track.clips) {
+        const source = item.media ? images.current.get(item.media) : undefined
+        if (source instanceof HTMLVideoElement && source.readyState >= 2) {
+          const target = Math.max(0, item.trimIn + time - item.start)
+          if (Math.abs(source.currentTime - target) > 0.25) {
+            try { source.currentTime = target } catch { /* navigateur occupé */ }
+          }
+        }
+      }
+    }
     drawFilm(ctx, film, time, { images: images.current })
-  }, [film, time, size.width, size.height])
+  }, [film, time, size.width, size.height, assetTick])
 
   useEffect(() => {
     if (!playing) return
@@ -202,25 +248,33 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   }, [playing, duration])
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2">
         <Button variant="ghost" size="sm" onClick={onBack}>Films</Button>
         <input className="min-w-40 bg-transparent font-serif text-xl outline-none" aria-label="Nom du film" value={film.name} onChange={(event) => onChange({ ...film, name: event.target.value })} />
-        <span className="text-xs text-muted">Enregistré à part des sites</span>
         <Button variant="ghost" size="sm" onClick={() => { const prev = past.at(-1); if (!prev) return; setPast(past.slice(0, -1)); setFuture([film, ...future]); onChange(prev) }}>Annuler</Button>
         <Button variant="ghost" size="sm" onClick={() => { const next = future[0]; if (!next) return; setFuture(future.slice(1)); setPast([...past, film]); onChange(next) }}>Rétablir</Button>
+        <Button variant="quiet" size="sm" onClick={() => fileRef.current?.click()}>Importer</Button>
+        <input ref={fileRef} className="sr-only" type="file" accept={MEDIA_ACCEPT} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = '' }} />
         <Button variant="quiet" size="sm" onClick={() => setPlaying((value) => !value)}>{playing ? 'Pause' : 'Lire'}</Button>
         <Button size="sm" disabled={exporting} onClick={() => void exportFilm(canvasRef.current, film, setExporting, setProgress)}>Exporter</Button>
       </header>
       {exporting ? <div className="h-1 bg-line"><div className="h-full bg-brass" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex min-h-0 flex-col bg-[#090807]">
-          <div className="grid flex-1 place-items-center p-4">
-            <canvas ref={canvasRef} width={size.width} height={size.height} className="max-h-[52vh] max-w-full rounded-xl shadow-2xl" />
+      {mediaError ? <p className="shrink-0 bg-danger/15 px-3 py-2 text-sm text-danger">{mediaError}</p> : null}
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1.15fr)_minmax(200px,0.85fr)] overflow-hidden lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#090807]">
+          <div
+            className={`relative min-h-0 flex-1 overflow-hidden p-4 ${dropOver ? 'outline outline-2 outline-brass' : ''}`}
+            onDragOver={(event) => { event.preventDefault(); setDropOver(true) }}
+            onDragLeave={() => setDropOver(false)}
+            onDrop={(event) => { event.preventDefault(); setDropOver(false); const file = event.dataTransfer.files?.[0]; if (file) void importFile(file) }}
+          >
+            <canvas ref={canvasRef} width={size.width} height={size.height} className="absolute inset-4 m-auto h-auto max-h-[calc(100%-2rem)] w-auto max-w-[calc(100%-2rem)] rounded-xl shadow-2xl" />
+            {dropOver ? <p className="pointer-events-none absolute bottom-3 rounded-full bg-black/70 px-3 py-1 text-xs text-white">Déposez pour importer</p> : null}
           </div>
-          <Timeline film={film} time={time} selected={selected} onSelect={setSelected} onTime={setTime} onBegin={() => setPast((stack) => [...stack.slice(-30), film])} onChange={onChange} />
+          <Timeline film={film} time={time} selected={selected} onSelect={setSelected} onTime={setTime} onBegin={() => setPast((stack) => [...stack.slice(-30), film])} onChange={onChange} onImport={() => fileRef.current?.click()} />
         </div>
-        <aside className="min-h-0 overflow-auto border-l border-line p-3">
+        <aside className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto border-t border-line p-3 lg:border-l lg:border-t-0">
           <label className="grid gap-1 text-xs text-muted">Format
             <Select value={film.format} onChange={(event) => commit({ ...film, format: event.target.value as Film['format'] })}>
               <option value="9:16">9:16</option>
@@ -228,7 +282,8 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
               <option value="16:9">16:9</option>
             </Select>
           </label>
-          {clip ? <ClipForm film={film} clip={clip} commit={commit} /> : <p className="mt-3 text-sm text-muted">Sélectionnez un plan dans la timeline.</p>}
+          <p className="mt-3 text-xs text-muted">Glissez une photo ou une vidéo sur l’aperçu. Si un plan image ou vidéo est sélectionné, le fichier le remplace.</p>
+          {clip ? <ClipForm film={film} clip={clip} commit={commit} onImport={(file) => void importFile(file)} /> : <p className="mt-3 text-sm text-muted">Sélectionnez un plan, ou importez un média pour en créer un.</p>}
           <MusicForm film={film} commit={commit} />
         </aside>
       </div>
@@ -236,7 +291,7 @@ function FilmEditor({ film, onChange, onBack }: { film: Film; onChange: (film: F
   )
 }
 
-function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange }: { film: Film; time: number; selected: string | null; onSelect: (id: string) => void; onTime: (time: number) => void; onBegin: () => void; onChange: (film: Film) => void }) {
+function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange, onImport }: { film: Film; time: number; selected: string | null; onSelect: (id: string) => void; onTime: (time: number) => void; onBegin: () => void; onChange: (film: Film) => void; onImport: () => void }) {
   const duration = Math.max(filmDuration(film) + 2, 8)
   const px = 78
   const drag = useRef<{ id: string; origin: number; x: number; edge: 'move' | 'start' | 'end' } | null>(null)
@@ -246,7 +301,7 @@ function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange }:
         <span className="text-muted">{time.toFixed(1)} s</span>
         <Button size="sm" variant="quiet" onClick={() => selected && onChange(splitClip(film, selected, time))}>Couper</Button>
         <Button size="sm" variant="quiet" onClick={() => selected && onChange(deleteClip(film, selected))}>Retirer</Button>
-        <Button size="sm" variant="quiet" onClick={() => onChange(addMediaClip(film, time, 'video'))}>Piste vidéo</Button>
+        <Button size="sm" variant="quiet" onClick={onImport}>Ajouter un média</Button>
       </div>
       <div className="relative max-h-64 overflow-auto" onPointerDown={(event) => { if (event.target === event.currentTarget) onTime(event.nativeEvent.offsetX / px) }}>
         <div style={{ width: duration * px }} className="relative">
@@ -288,7 +343,7 @@ function Timeline({ film, time, selected, onSelect, onTime, onBegin, onChange }:
   )
 }
 
-function ClipForm({ film, clip, commit }: { film: Film; clip: Clip; commit: (film: Film) => void }) {
+function ClipForm({ film, clip, commit, onImport }: { film: Film; clip: Clip; commit: (film: Film) => void; onImport: (file: File) => void }) {
   const patch = (partial: Partial<Clip>) => commit({
     ...film,
     tracks: film.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => item.id === clip.id ? { ...item, ...partial } : item) })),
@@ -301,15 +356,15 @@ function ClipForm({ film, clip, commit }: { film: Film; clip: Clip; commit: (fil
       <label className="grid gap-1 text-xs text-muted">Sous-texte
         <Textarea value={clip.subtext} onChange={(event) => patch({ subtext: event.target.value })} />
       </label>
-      <label className="grid gap-1 text-xs text-muted">Image ou clip
-        <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => {
+      <label className="grid gap-1 text-xs text-muted">Remplacer la photo ou la vidéo
+        <input type="file" accept={MEDIA_ACCEPT} onChange={(event) => {
           const file = event.target.files?.[0]
-          if (!file) return
-          const reader = new FileReader()
-          reader.onload = () => patch({ media: String(reader.result), mediaKind: file.type.startsWith('video') ? 'video' : 'image' })
-          reader.readAsDataURL(file)
+          if (file) onImport(file)
+          event.target.value = ''
         }} />
       </label>
+      {clip.media.startsWith('data:image') ? <img src={clip.media} alt="" className="h-16 w-full rounded-md object-cover" /> : null}
+      {clip.media.startsWith('data:video') ? <p className="text-xs text-forest">Vidéo prête dans ce plan.</p> : null}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={clip.muted} onChange={(event) => patch({ muted: event.target.checked })} /> Couper le son du clip</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={clip.kenBurns} onChange={(event) => patch({ kenBurns: event.target.checked })} /> Ken Burns</label>
       <label className="grid gap-1 text-xs text-muted">Transition
@@ -361,16 +416,6 @@ function MusicForm({ film, commit }: { film: Film; commit: (film: Film) => void 
   )
 }
 
-function addMediaClip(film: Film, time: number, kind: 'video'): Film {
-  return {
-    ...film,
-    tracks: film.tracks.map((track) => track.kind === kind ? {
-      ...track,
-      clips: [...track.clips, { id: `clip-${Math.random().toString(36).slice(2, 8)}`, start: time, duration: 3, trimIn: 0, text: 'Clip', subtext: '', media: '', mediaKind: 'none', transition: 'fade', textAnim: 'none', kenBurns: false, shape: 'none', color: '', volume: 1, muted: true }],
-    } : track),
-  }
-}
-
 async function exportFilm(canvas: HTMLCanvasElement | null, film: Film, setExporting: (value: boolean) => void, setProgress: (value: number) => void) {
   if (!canvas) return
   setExporting(true)
@@ -414,10 +459,15 @@ function loadSource(src: string, video: boolean): Promise<CanvasImageSource> {
   return new Promise((resolve, reject) => {
     if (video) {
       const element = document.createElement('video')
-      element.src = src
       element.muted = true
-      element.onloadeddata = () => resolve(element)
-      element.onerror = () => reject(new Error('Clip vidéo illisible'))
+      element.playsInline = true
+      element.onloadeddata = () => {
+        const done = () => resolve(element)
+        element.onseeked = done
+        try { element.currentTime = 0.05 } catch { done() }
+      }
+      element.onerror = () => reject(new Error('Cette vidéo n’est pas lisible. Utilisez un MP4 ou un WebM.'))
+      element.src = src
       return
     }
     const image = new Image()
