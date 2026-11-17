@@ -10,6 +10,7 @@ import { PALETTES, STYLES } from '@/domain/styles'
 import { applyCommittedBoxes } from '@/domain/freeform'
 import { IdentityPanel, SectionBackdrop } from '@/studio/IdentityPanel'
 import { VariantGallery } from '@/studio/VariantGallery'
+import { ShopPanel } from '@/studio/ShopPanel'
 import { FreePanel } from '@/studio/FreePanel'
 import { MotionPanel } from '@/studio/MotionPanel'
 import {
@@ -48,7 +49,7 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
   const [elementKey, setElementKey] = useState('')
   const [nodeIds, setNodeIds] = useState<string[]>([])
   const [viewport, setViewport] = useState<Viewport>('desktop')
-  const [tab, setTab] = useState<'add' | 'layers' | 'pages' | 'media'>('layers')
+  const [tab, setTab] = useState<'add' | 'layers' | 'pages' | 'media' | 'shop'>('layers')
   const [preview, setPreview] = useState(false)
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [inspectorOpen, setInspectorOpen] = useState(true)
@@ -184,14 +185,14 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
       </header>
       <div
         className="grid min-h-0 min-w-0 flex-1 overflow-hidden"
-        style={{ gridTemplateColumns: preview ? 'minmax(0,1fr)' : inspectorOpen ? `248px minmax(0,1fr) ${inspectorWidth}px` : '248px minmax(0,1fr) 44px' }}
+        style={{ gridTemplateColumns: preview ? 'minmax(0,1fr)' : inspectorOpen ? `${tab === 'shop' ? 360 : 248}px minmax(0,1fr) ${inspectorWidth}px` : `${tab === 'shop' ? 360 : 248}px minmax(0,1fr) 44px` }}
       >
         {!preview ? (
           <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-line">
             <div className="flex border-b border-line text-xs">
-              {(['add', 'layers', 'pages', 'media'] as const).map((id) => (
+              {(['add', 'layers', 'pages', 'media', 'shop'] as const).map((id) => (
                 <button key={id} type="button" className={cn('flex-1 py-2', tab === id && 'text-brass')} onClick={() => setTab(id)}>
-                  {id === 'add' ? 'Ajouter' : id === 'layers' ? 'Calques' : id === 'pages' ? 'Pages' : 'Médias'}
+                  {id === 'add' ? 'Ajouter' : id === 'layers' ? 'Calques' : id === 'pages' ? 'Pages' : id === 'media' ? 'Médias' : 'Boutique'}
                 </button>
               ))}
             </div>
@@ -236,6 +237,7 @@ export function Editor({ project, onChange, onBack, onVideo }: { project: Projec
                 <Pages project={project} pageId={page?.id ?? ''} commit={commit} setPageId={setPageId} />
               ) : null}
               {tab === 'media' ? <Media project={project} commit={commit} pageId={page?.id} blockId={block?.id} elementKey={elementKey} /> : null}
+              {tab === 'shop' ? <ShopPanel project={project} commit={(next) => commit(touch(next))} /> : null}
             </div>
           </aside>
         ) : null}

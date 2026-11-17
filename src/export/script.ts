@@ -342,6 +342,114 @@ export function buildScript(): string {
   }
   ${motionRuntime()}
   ${freeEditorRuntime()}
+  ${shopRuntime()}
 })();
+`
+}
+
+function shopRuntime(): string {
+  return `
+  const shopKey = 'atelier-cart-' + (location.pathname || 'boutique');
+  const readCart = () => { try { return JSON.parse(localStorage.getItem(shopKey) || '[]'); } catch (error) { return []; } };
+  const writeCart = (lines) => { localStorage.setItem(shopKey, JSON.stringify(lines)); paintCart(); };
+  const euros = (value) => value.toFixed(2).replace('.', ',') + ' €';
+  const paintCount = () => {
+    const count = readCart().reduce((sum, line) => sum + line.qty, 0);
+    document.querySelectorAll('[data-cart-count]').forEach((node) => { node.textContent = String(count); });
+  };
+  const paintCart = () => {
+    paintCount();
+    const root = document.getElementById('cart-root');
+    const total = document.getElementById('cart-total');
+    if (!root) return;
+    const lines = readCart();
+    if (!lines.length) { root.innerHTML = '<p>Le panier est vide.</p>'; if (total) total.textContent = ''; return; }
+    root.innerHTML = lines.map((line, index) => '<article class="card"><p><strong>' + line.name + '</strong>' + (line.variantName ? ' · ' + line.variantName : '') + '</p><p>' + euros(line.price) + '</p><div class="cluster"><button type="button" data-qty="-1" data-index="' + index + '">−</button><span>' + line.qty + '</span><button type="button" data-qty="1" data-index="' + index + '">+</button><button type="button" data-remove="' + index + '">Retirer</button></div></article>').join('');
+    const sum = lines.reduce((acc, line) => acc + line.price * line.qty, 0);
+    if (total) total.textContent = 'Total : ' + euros(Math.round(sum * 100) / 100);
+  };
+  document.addEventListener('change', (event) => {
+    const select = event.target.closest('[data-shop-variant]');
+    if (!select) return;
+    const option = select.selectedOptions[0];
+    const button = select.closest('.shop-product')?.querySelector('[data-shop-add]');
+    if (!button || !option) return;
+    button.setAttribute('data-price', option.getAttribute('data-price') || '0');
+    button.setAttribute('data-stock', option.getAttribute('data-stock') || '0');
+    button.setAttribute('data-variant', option.value);
+    button.setAttribute('data-variant-name', option.getAttribute('data-label') || '');
+    const price = select.closest('.shop-product')?.querySelector('[data-shop-price]');
+    const stock = select.closest('.shop-product')?.querySelector('[data-shop-stock]');
+    if (price) price.innerHTML = '<strong>' + euros(Number(option.getAttribute('data-price') || '0')) + '</strong>';
+    if (stock) stock.textContent = Number(option.getAttribute('data-stock') || '0') > 0 ? option.getAttribute('data-stock') + ' en stock' : 'Rupture';
+  });
+  document.addEventListener('click', (event) => {
+    const thumb = event.target.closest('[data-shop-thumb]');
+    if (thumb) {
+      const photos = [...document.querySelectorAll('[data-shop-photo]')];
+      photos.forEach((photo, index) => { photo.hidden = String(index) !== thumb.getAttribute('data-shop-thumb'); });
+    }
+    const add = event.target.closest('[data-shop-add]');
+    if (add) {
+      const stock = Number(add.getAttribute('data-stock') || '0');
+      if (stock <= 0) return;
+      const lines = readCart();
+      const variant = add.getAttribute('data-variant') || '';
+      const found = lines.find((line) => line.productId === add.getAttribute('data-id') && line.variantId === variant);
+      if (found) found.qty += 1;
+      else lines.push({ productId: add.getAttribute('data-id'), variantId: variant, name: add.getAttribute('data-name'), variantName: add.getAttribute('data-variant-name') || '', price: Number(add.getAttribute('data-price') || '0'), qty: 1 });
+      writeCart(lines);
+    }
+    const qty = event.target.closest('[data-qty]');
+    if (qty) {
+      const lines = readCart();
+      const line = lines[Number(qty.getAttribute('data-index'))];
+      if (line) line.qty = Math.max(1, line.qty + Number(qty.getAttribute('data-qty')));
+      writeCart(lines);
+    }
+    const remove = event.target.closest('[data-remove]');
+    if (remove) {
+      const lines = readCart().filter((_, index) => index !== Number(remove.getAttribute('data-remove')));
+      writeCart(lines);
+    }
+  });
+  document.addEventListener('input', (event) => {
+    const grid = document.querySelector('[data-shop-grid]');
+    if (!grid) return;
+    const collection = document.querySelector('[data-shop-collection]')?.value || 'tout';
+    const sort = document.querySelector('[data-shop-sort]')?.value || 'prix-asc';
+    const text = (document.querySelector('[data-shop-search]')?.value || '').toLowerCase();
+    const cards = [...grid.querySelectorAll('[data-product-card]')];
+    cards.forEach((card) => {
+      const okCollection = collection === 'tout' || card.getAttribute('data-collection') === collection;
+      const okText = !text || (card.getAttribute('data-name') || '').includes(text);
+      card.hidden = !(okCollection && okText);
+    });
+    const visible = cards.filter((card) => !card.hidden);
+    visible.sort((a, b) => {
+      if (sort === 'nom') return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '', 'fr');
+      if (sort === 'stock') return Number(b.getAttribute('data-stock')) - Number(a.getAttribute('data-stock'));
+      const diff = Number(a.getAttribute('data-price')) - Number(b.getAttribute('data-price'));
+      return sort === 'prix-desc' ? -diff : diff;
+    });
+    visible.forEach((card) => grid.appendChild(card));
+  });
+  const send = document.querySelector('[data-cart-send]');
+  if (send) send.addEventListener('click', () => {
+    const lines = readCart();
+    if (!lines.length) return;
+    const rows = lines.map((line, index) => (index + 1) + '. ' + line.name + (line.variantName ? ' (' + line.variantName + ')' : '') + ' × ' + line.qty + ' — ' + euros(line.price * line.qty));
+    const sum = lines.reduce((acc, line) => acc + line.price * line.qty, 0);
+    const text = 'Bonjour, je souhaite commander :\\n' + rows.join('\\n') + '\\nTotal : ' + euros(sum) + '\\nCeci n’est pas un paiement confirmé.';
+    const mode = body.dataset.order || 'email';
+    if (mode === 'whatsapp') {
+      const phone = (body.dataset.whatsapp || '').replace(/\\D/g, '');
+      const intl = phone.startsWith('0') ? '33' + phone.slice(1) : phone;
+      window.open('https://wa.me/' + intl + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+      return;
+    }
+    window.location.href = 'mailto:' + (body.dataset.email || '') + '?subject=' + encodeURIComponent('Commande') + '&body=' + encodeURIComponent(text);
+  });
+  paintCart();
 `
 }

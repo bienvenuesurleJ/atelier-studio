@@ -5,6 +5,7 @@ import type { Block, DayHours, FreeNode, ListItem, Page, Project } from '../doma
 import { esc, lines, paragraphs, safeJson } from './html'
 import { animDataAttrs } from './animAttrs'
 import { backdropVars } from '../domain/backdrop'
+import { shopProducts } from '../domain/shop'
 
 export interface ArticlePage {
   slug: string
@@ -640,6 +641,16 @@ function group(items: ListItem[], key: string): { name: string; items: ListItem[
   return order.map((name) => ({ name, items: map.get(name) ?? [] }))
 }
 
+export function renderCustomPage(
+  project: Project,
+  slug: string,
+  title: string,
+  main: string,
+  options: PageOptions,
+): string {
+  return documentShell(project, { slug, title, description: title, main, options })
+}
+
 function documentShell(
   project: Project,
   input: { slug: string; title: string; description: string; main: string; options: PageOptions },
@@ -669,6 +680,9 @@ function documentShell(
   const siteBackdrop = backdropVars(project.backdrop, 'site')
   const brand = `<a class="brand" href="${esc(safeHref('index', input.options.linkMode))}">${logo ? `<img class="brand-logo" data-logo="1" src="${esc(logo)}" alt="">` : ''}<span>${esc(business.name)}</span></a>`
   const showNav = project.pages.filter((page) => page.showInNav).length > 1
+  const shopLinks = shopProducts(project).length && input.options.linkMode === 'export'
+    ? `<a href="boutique.html">Boutique</a><a href="panier.html">Panier <span data-cart-count>0</span></a>`
+    : ''
   const json = safeJson(schemaData(project, canonical, logo && !logo.startsWith('data:') ? logo : undefined))
   const css = input.options.inlineCss
     ? `<style>${input.options.inlineCss}</style>`
@@ -710,7 +724,7 @@ ${project.chrome.announcement ? `<div class="announce">${esc(project.chrome.anno
   <div class="wrap header-inner">
     ${brand}
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
-    <nav id="site-nav" class="site-nav">${showNav ? nav : ''}${phone}${cta}</nav>
+    <nav id="site-nav" class="site-nav">${showNav ? nav : ''}${shopLinks}${phone}${cta}</nav>
   </div>
 </header>
 <main id="contenu">
