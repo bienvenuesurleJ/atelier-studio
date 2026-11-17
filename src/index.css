@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --color-ink: #f4efe7;
+  --color-muted: #b3a79a;
+  --color-paper: #171512;
+  --color-paper-2: #211e1a;
+  --color-sand: #0e0d0b;
+  --color-line: #3a342c;
+  --color-brass: #d7b07a;
+  --color-brass-2: #f0d7ae;
+  --color-forest: #8fbfa8;
+  --color-moss: #2f6d52;
+  --color-danger: #e07a72;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-sand);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: #5c4630;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4036 transparent;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+  .print-sheet {
+    position: absolute;
+    inset: 0;
+    background: white;
+    color: black;
+  }
+}
