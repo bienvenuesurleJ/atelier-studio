@@ -5,6 +5,7 @@ import { buildCss } from './css'
 import { monogramPng } from './png'
 import { collectArticles, renderArticleHtml, renderPageHtml, type PageOptions } from './render'
 import { buildScript } from './script'
+import { shopFiles } from './shopHtml'
 
 export interface GeneratedFile {
   path: string
@@ -48,6 +49,7 @@ export function generateSite(project: Project): GeneratedFile[] {
   const pages = [
     ...project.pages.map((page) => ({ path: pageFile(page.slug), html: renderPageHtml(project, page, options) })),
     ...articles.map((article) => ({ path: pageFile(article.slug), html: renderArticleHtml(project, article, options) })),
+    ...shopFiles(project, options),
   ]
   const media = new Map<string, Uint8Array>()
   const files: GeneratedFile[] = []

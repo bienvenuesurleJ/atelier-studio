@@ -200,6 +200,9 @@ textarea{min-height:8rem;resize:vertical}
 .steps li::before{content:counter(step);display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--primary);color:var(--on-primary);margin-bottom:.6rem;font-weight:700}
 .block.steps[data-variant="stacked"] .steps{grid-template-columns:1fr}
 .catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.shop-card img,.shop-gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius)}
+.shop-filters{align-items:end;margin:1rem 0}
+.shop-filters label{display:grid;gap:.3rem;font-size:.85rem}
 .product img,.product .media-fallback{aspect-ratio:1;border-radius:calc(var(--radius)*.7);margin-bottom:.8rem}
 .badge{display:inline-block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
 .site-footer{border-top:1px solid var(--border)}

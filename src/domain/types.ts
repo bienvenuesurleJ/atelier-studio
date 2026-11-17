@@ -207,7 +207,7 @@ export interface StudioFont {
 export type VideoFormat = '9:16' | '1:1' | '16:9'
 export type VideoTemplate = 'boutique' | 'promo' | 'produit' | 'avis' | 'menu' | 'evenement'
 export type VideoTransition = 'fade' | 'slide' | 'zoom' | 'kenburns' | 'mask'
-export type VideoTextAnim = 'none' | 'fade' | 'rise' | 'type'
+export type VideoTextAnim = 'none' | 'fade' | 'rise' | 'type' | 'pop' | 'glisse'
 
 export interface VideoScene {
   id: string
@@ -335,6 +335,28 @@ export interface OrderingSettings {
   note: string
 }
 
+export interface ProductVariant {
+  id: string
+  name: string
+  price: number
+  compareAt: number
+  stock: number
+}
+
+export interface ShopProduct {
+  id: string
+  name: string
+  slug: string
+  description: string
+  price: number
+  compareAt: number
+  stock: number
+  collection: string
+  images: string[]
+  paymentLink: string
+  variants: ProductVariant[]
+}
+
 export interface ChromeSettings {
   announcement: string
   ctaLabel: string
@@ -428,6 +450,7 @@ export interface Project {
   library: string[]
   fonts: StudioFont[]
   videos: PromoVideo[]
+  products?: ShopProduct[]
   pages: Page[]
   createdAt: string
   updatedAt: string
